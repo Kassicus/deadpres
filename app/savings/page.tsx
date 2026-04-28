@@ -109,9 +109,9 @@ export default function SavingsPage() {
 
 function SummaryStat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-border/70 bg-card p-4">
-      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
-      <div className="text-2xl font-semibold tracking-tight num mt-1">{value}</div>
+    <div className="rounded-xl border border-border/70 bg-card p-3 sm:p-4 min-w-0">
+      <div className="text-[10px] uppercase tracking-widest text-muted-foreground truncate">{label}</div>
+      <div className="text-xl sm:text-2xl font-semibold tracking-tight num mt-1 truncate">{value}</div>
     </div>
   );
 }
@@ -162,7 +162,7 @@ function GoalCard({
               <div className="font-semibold tracking-tight truncate flex-1">{goal.name}</div>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon-sm" className="opacity-0 group-hover:opacity-100">
+                  <Button variant="ghost" size="icon-sm" className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100">
                     <MoreHorizontal />
                   </Button>
                 </DropdownMenuTrigger>

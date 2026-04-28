@@ -31,15 +31,15 @@ export function Topbar({ title, description }: { title: string; description?: st
   const displayName = (user?.user_metadata?.full_name as string | undefined) ?? user?.email ?? "Account";
 
   return (
-    <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-border/50 bg-background/70 backdrop-blur-xl px-4 lg:px-8">
-      <div className="flex flex-col leading-tight min-w-0">
+    <header className="sticky top-0 z-20 flex h-16 items-center gap-2 sm:gap-3 border-b border-border/50 bg-background/70 backdrop-blur-xl px-4 lg:px-8">
+      <div className="flex flex-col leading-tight min-w-0 flex-1">
         <h1 className="text-base font-semibold tracking-tight truncate">{title}</h1>
         {description && (
-          <p className="text-xs text-muted-foreground truncate">{description}</p>
+          <p className="text-xs text-muted-foreground truncate hidden sm:block">{description}</p>
         )}
       </div>
 
-      <div className="ml-auto flex items-center gap-2">
+      <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
         <Button onClick={() => setOpen(true)} size="sm" className="gap-1.5">
           <Plus />
           <span className="hidden sm:inline">Add transaction</span>

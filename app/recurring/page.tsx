@@ -101,7 +101,7 @@ export default function RecurringPage() {
           />
         ) : (
           <>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+            <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-6">
               <SummaryStat
                 label="Income / mo"
                 value={formatCurrency(incomeTotal)}
@@ -121,8 +121,8 @@ export default function RecurringPage() {
               />
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <Card className="lg:col-span-1 p-5">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+              <Card className="lg:col-span-1 p-4 sm:p-5">
                 <Tabs value={filter} onValueChange={(v) => setFilter(v as Filter)}>
                   <TabsList className="w-full grid grid-cols-3">
                     <TabsTrigger value="all">All</TabsTrigger>
@@ -188,18 +188,18 @@ export default function RecurringPage() {
                           <div className="flex items-center gap-2">
                             <span className="font-medium truncate">{s.name}</span>
                             {!s.active && (
-                              <span className="text-[10px] uppercase tracking-widest text-muted-foreground bg-muted rounded-md px-1.5 py-0.5">
+                              <span className="text-[10px] uppercase tracking-widest text-muted-foreground bg-muted rounded-md px-1.5 py-0.5 shrink-0">
                                 Paused
                               </span>
                             )}
                           </div>
-                          <div className="text-xs text-muted-foreground flex items-center gap-1.5 truncate">
+                          <div className="text-xs text-muted-foreground flex items-center gap-1.5 min-w-0 truncate">
                             <CalendarDays className="size-3 shrink-0" />
                             <span className="truncate">{formatScheduleSummary(s.schedule)}</span>
-                            <span>·</span>
-                            <span>{cat.name}</span>
-                            <span>·</span>
-                            <span>Next {formatRelative(s.nextChargeDate)}</span>
+                            <span className="shrink-0 hidden sm:inline">·</span>
+                            <span className="shrink-0 hidden sm:inline truncate">{cat.name}</span>
+                            <span className="shrink-0">·</span>
+                            <span className="shrink-0">Next {formatRelative(s.nextChargeDate)}</span>
                           </div>
                         </div>
                         <div className="text-right shrink-0">
@@ -216,7 +216,7 @@ export default function RecurringPage() {
                             <Button
                               variant="ghost"
                               size="icon-sm"
-                              className="opacity-0 group-hover:opacity-100"
+                              className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 shrink-0"
                               aria-label="Actions"
                             >
                               <MoreHorizontal />
@@ -280,12 +280,12 @@ function SummaryStat({
   icon?: React.ComponentType<{ className?: string }>;
 }) {
   return (
-    <div className="rounded-xl border border-border/70 bg-card p-4">
+    <div className="rounded-xl border border-border/70 bg-card p-3 sm:p-4 min-w-0">
       <div className="flex items-center gap-2">
-        <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
-        {Icon && <Icon className="size-3 text-muted-foreground" />}
+        <div className="text-[10px] uppercase tracking-widest text-muted-foreground truncate">{label}</div>
+        {Icon && <Icon className="size-3 text-muted-foreground shrink-0" />}
       </div>
-      <div className={cn("text-2xl font-semibold tracking-tight num mt-1", color)}>{value}</div>
+      <div className={cn("text-lg sm:text-2xl font-semibold tracking-tight num mt-1 truncate", color)}>{value}</div>
     </div>
   );
 }

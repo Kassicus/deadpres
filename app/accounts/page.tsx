@@ -71,7 +71,7 @@ export default function AccountsPage() {
                       {formatCurrency(group.accounts.reduce((s, a) => s + (group.type === "credit" || group.type === "loan" ? -a.balance : a.balance), 0))}
                     </span>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
                     {group.accounts.map((a) => (
                       <AccountCard key={a.id} account={a} />
                     ))}
@@ -90,9 +90,9 @@ export default function AccountsPage() {
 
 function SummaryStat({ label, value, accent }: { label: string; value: string; accent: string }) {
   return (
-    <div className="rounded-xl border border-border/70 bg-card p-4">
-      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
-      <div className={`text-2xl font-semibold tracking-tight num mt-1 ${accent}`}>{value}</div>
+    <div className="rounded-xl border border-border/70 bg-card p-3 sm:p-4 min-w-0">
+      <div className="text-[10px] uppercase tracking-widest text-muted-foreground truncate">{label}</div>
+      <div className={`text-xl sm:text-2xl font-semibold tracking-tight num mt-1 truncate ${accent}`}>{value}</div>
     </div>
   );
 }

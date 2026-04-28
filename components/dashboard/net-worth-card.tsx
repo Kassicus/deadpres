@@ -94,11 +94,11 @@ export function NetWorthCard() {
   return (
     <Card className="overflow-hidden relative">
       <div className="absolute inset-0 gradient-mesh opacity-50 pointer-events-none" />
-      <div className="relative p-6 grid gap-6 lg:grid-cols-[1fr_auto]">
+      <div className="relative p-4 sm:p-6 grid gap-4 lg:gap-6 lg:grid-cols-[1fr_auto]">
         <div>
           <div className="text-xs uppercase tracking-widest text-muted-foreground">Net Worth</div>
-          <div className="mt-1 flex items-baseline gap-3">
-            <div className="text-4xl lg:text-5xl font-semibold tracking-tight num">{formatCurrency(total)}</div>
+          <div className="mt-1 flex items-baseline flex-wrap gap-x-3 gap-y-1">
+            <div className="text-3xl sm:text-4xl lg:text-5xl font-semibold tracking-tight num">{formatCurrency(total)}</div>
             {first !== 0 && (
               <div
                 className={`flex items-center gap-1 text-sm font-medium ${positive ? "text-success" : "text-destructive"}`}

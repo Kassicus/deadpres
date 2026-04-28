@@ -130,7 +130,7 @@ export default function DebtPage() {
         <PageHeader title="Debt payoff" description="Plan a strategy, throw extra at debt, watch the timeline shrink." />
 
         {/* Hero stats */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <HeroStat icon={DollarSign} label="Total debt" value={formatCurrency(totalDebt)} color="var(--coral)" />
           <HeroStat icon={CalendarRange} label="Min payments" value={`${formatCurrency(totalMin)}/mo`} color="var(--amber)" />
           <HeroStat
@@ -149,7 +149,7 @@ export default function DebtPage() {
           />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6">
+        <div className="grid grid-cols-1 xl:grid-cols-[1fr_360px] gap-6">
           {/* Timeline chart */}
           <Card className="p-5">
             <div className="flex items-center justify-between mb-1">
@@ -251,7 +251,7 @@ export default function DebtPage() {
             <div>
               <h3 className="font-semibold tracking-tight">Strategy</h3>
               <Tabs value={plan.strategy} onValueChange={(v) => setDebtPlan({ strategy: v as DebtStrategy })} className="mt-2">
-                <TabsList className="grid grid-cols-3 w-full h-auto">
+                <TabsList className="grid grid-cols-3 w-full h-auto text-xs sm:text-sm">
                   <TabsTrigger value="avalanche">Avalanche</TabsTrigger>
                   <TabsTrigger value="snowball">Snowball</TabsTrigger>
                   <TabsTrigger value="highest-balance">Biggest</TabsTrigger>

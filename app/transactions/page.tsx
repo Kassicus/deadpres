@@ -72,14 +72,14 @@ export default function TransactionsPage() {
           }
         />
 
-        <div className="grid grid-cols-3 gap-3 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
           <SummaryStat label="Income" value={formatCurrency(totals.income)} color="text-success" />
           <SummaryStat label="Spending" value={formatCurrency(totals.expense)} color="text-foreground" />
           <SummaryStat label="Net" value={formatCurrency(totals.net, { signed: true })} color={totals.net >= 0 ? "text-success" : "text-destructive"} />
         </div>
 
-        <Card className="p-4 mb-4">
-          <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto_auto] gap-3">
+        <Card className="p-3 sm:p-4 mb-4">
+          <div className="flex flex-col gap-3 lg:grid lg:grid-cols-[1fr_auto_auto_auto]">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
               <Input
@@ -98,25 +98,27 @@ export default function TransactionsPage() {
                 </button>
               )}
             </div>
-            <Select value={accountId} onValueChange={setAccountId}>
-              <SelectTrigger className="md:w-44"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All accounts</SelectItem>
-                {accounts.map((a) => (
-                  <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={category} onValueChange={setCategory}>
-              <SelectTrigger className="md:w-44"><SelectValue /></SelectTrigger>
-              <SelectContent className="max-h-72">
-                <SelectItem value="all">All categories</SelectItem>
-                {DEFAULT_CATEGORIES.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Tabs value={type} onValueChange={(v) => setType(v as TransactionType | "all")}>
+            <div className="grid grid-cols-2 gap-3 lg:contents">
+              <Select value={accountId} onValueChange={setAccountId}>
+                <SelectTrigger className="lg:w-44"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All accounts</SelectItem>
+                  {accounts.map((a) => (
+                    <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={category} onValueChange={setCategory}>
+                <SelectTrigger className="lg:w-44"><SelectValue /></SelectTrigger>
+                <SelectContent className="max-h-72">
+                  <SelectItem value="all">All categories</SelectItem>
+                  {DEFAULT_CATEGORIES.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Tabs value={type} onValueChange={(v) => setType(v as TransactionType | "all")} className="overflow-x-auto">
               <TabsList>
                 <TabsTrigger value="all">All</TabsTrigger>
                 <TabsTrigger value="expense" className="gap-1"><ArrowUpRight className="size-3" /> Out</TabsTrigger>
@@ -165,9 +167,9 @@ export default function TransactionsPage() {
 
 function SummaryStat({ label, value, color }: { label: string; value: string; color: string }) {
   return (
-    <div className="rounded-xl border border-border/70 bg-card p-4">
-      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
-      <div className={`text-xl font-semibold tracking-tight num mt-1 ${color}`}>{value}</div>
+    <div className="rounded-xl border border-border/70 bg-card p-3 sm:p-4 min-w-0">
+      <div className="text-[10px] uppercase tracking-widest text-muted-foreground truncate">{label}</div>
+      <div className={`text-base sm:text-xl font-semibold tracking-tight num mt-1 truncate ${color}`}>{value}</div>
     </div>
   );
 }

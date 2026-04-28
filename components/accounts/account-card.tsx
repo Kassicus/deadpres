@@ -51,7 +51,7 @@ export function AccountCard({ account }: { account: Account }) {
               <div className="font-semibold tracking-tight truncate">{account.name}</div>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon-sm" className="opacity-0 group-hover:opacity-100">
+                  <Button variant="ghost" size="icon-sm" className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100">
                     <MoreHorizontal />
                   </Button>
                 </DropdownMenuTrigger>

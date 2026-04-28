@@ -45,7 +45,7 @@ export function SpendingDonut() {
         {data.length === 0 ? (
           <div className="text-sm text-muted-foreground py-12 text-center">No expenses yet this month.</div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr] gap-4 items-center">
+          <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr] gap-4 items-center">
             <Donut data={display} centerLabel="This month" centerValue={formatCurrency(total, { compact: true })} height={200} />
             <div className="space-y-2">
               {display.map((d) => (

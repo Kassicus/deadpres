@@ -104,15 +104,15 @@ export default function OnboardingPage() {
   }
 
   return (
-    <main className="min-h-screen relative overflow-hidden">
+    <main className="min-h-screen relative overflow-x-hidden">
       <div className="absolute inset-0 gradient-mesh opacity-50 pointer-events-none" />
       <div className="absolute inset-0 dot-pattern opacity-15 pointer-events-none" />
 
-      <div className="relative max-w-2xl mx-auto px-4 py-10 lg:py-20">
+      <div className="relative max-w-2xl mx-auto px-4 py-6 sm:py-10 lg:py-16">
         <Stepper current={step} />
 
         {step === "welcome" && (
-          <Card className="p-8 lg:p-10 text-center">
+          <Card className="p-6 sm:p-8 lg:p-10 text-center">
             <div className="grid place-items-center size-16 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white shadow-xl shadow-violet-500/30 mx-auto mb-5">
               <CircleDollarSign className="size-8" strokeWidth={2.5} />
             </div>
@@ -134,7 +134,7 @@ export default function OnboardingPage() {
         )}
 
         {step === "account" && (
-          <Card className="p-8 lg:p-10">
+          <Card className="p-6 sm:p-8 lg:p-10">
             <h2 className="text-2xl font-semibold tracking-tight">Add your first account</h2>
             <p className="text-muted-foreground mt-1.5 text-sm">
               Start with the account you use most — checking is a great pick. You can add more later.
@@ -197,7 +197,7 @@ export default function OnboardingPage() {
         )}
 
         {step === "transaction" && (
-          <Card className="p-8 lg:p-10">
+          <Card className="p-6 sm:p-8 lg:p-10">
             <h2 className="text-2xl font-semibold tracking-tight">Log your first transaction</h2>
             <p className="text-muted-foreground mt-1.5 text-sm">
               The most recent thing you spent money on works perfectly. We'll show you how it lands on your dashboard.
@@ -231,7 +231,7 @@ export default function OnboardingPage() {
         )}
 
         {step === "tour" && (
-          <Card className="p-8 lg:p-10">
+          <Card className="p-6 sm:p-8 lg:p-10">
             <h2 className="text-2xl font-semibold tracking-tight">You're set up. Here's the lay of the land.</h2>
             <p className="text-muted-foreground mt-1.5 text-sm">
               Three places to know about — everything else builds from these.

@@ -68,8 +68,8 @@ export default function ProjectionsPage() {
           description="Run what-ifs on your savings and investments. Compound interest is your best friend."
         />
 
-        <Tabs value={preset} onValueChange={(v) => setPreset(v as typeof preset)}>
-          <TabsList>
+        <Tabs value={preset} onValueChange={(v) => setPreset(v as typeof preset)} className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+          <TabsList className="w-max sm:w-auto">
             <TabsTrigger value="investment">From investments</TabsTrigger>
             <TabsTrigger value="savings">From savings</TabsTrigger>
             <TabsTrigger value="networth">From net worth</TabsTrigger>
@@ -77,7 +77,7 @@ export default function ProjectionsPage() {
           </TabsList>
         </Tabs>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[360px_1fr] gap-6">
+        <div className="grid grid-cols-1 xl:grid-cols-[360px_1fr] gap-6">
           {/* Controls */}
           <Card className="p-5 space-y-5">
             <div className="space-y-2">

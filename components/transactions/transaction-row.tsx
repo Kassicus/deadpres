@@ -59,19 +59,19 @@ export function TransactionRow({ tx, dense }: { tx: Transaction; dense?: boolean
             : `${category.name} · ${account?.name ?? ""}`}
         </div>
       </div>
-      <div className="text-right shrink-0">
-        <div className={cn("font-semibold num text-sm", valueColor)}>
+      <div className="text-right shrink-0 ml-1">
+        <div className={cn("font-semibold num text-sm whitespace-nowrap", valueColor)}>
           {sign}
           {formatCurrency(tx.amount)}
         </div>
-        <div className="text-[11px] text-muted-foreground">{formatRelative(tx.date)}</div>
+        <div className="text-[11px] text-muted-foreground whitespace-nowrap">{formatRelative(tx.date)}</div>
       </div>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
             variant="ghost"
             size="icon-sm"
-            className="opacity-0 group-hover:opacity-100 transition-opacity"
+            className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity shrink-0"
             aria-label="Transaction actions"
           >
             <MoreHorizontal />

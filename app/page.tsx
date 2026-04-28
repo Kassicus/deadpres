@@ -17,19 +17,19 @@ export default function DashboardPage() {
       <main className="px-4 lg:px-8 py-6 space-y-6 max-w-[1400px] w-full">
         <NetWorthCard />
         <AccountTiles />
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
           <CashflowCard />
           <SpendingDonut />
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2">
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+          <div className="xl:col-span-2">
             <RecentTransactions />
           </div>
           <div className="space-y-6">
             <UpcomingBills />
           </div>
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
           <DebtOverview />
           <SavingsProgress />
         </div>

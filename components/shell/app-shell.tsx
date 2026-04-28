@@ -26,7 +26,7 @@ export function AppShell({
       <Sidebar />
       <div className="flex flex-col flex-1 min-w-0 relative">
         <div className="absolute inset-0 -z-10 gradient-mesh opacity-40 pointer-events-none" />
-        <div className="flex-1 flex flex-col min-w-0">{children}</div>
+        <div className="flex-1 flex flex-col min-w-0 pb-16 lg:pb-0">{children}</div>
         <MobileNav />
       </div>
     </div>
