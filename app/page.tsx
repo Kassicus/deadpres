@@ -1,7 +1,6 @@
 "use client";
 
 import { Topbar } from "@/components/shell/topbar";
-import { WelcomeBanner } from "@/components/shell/welcome-banner";
 import { NetWorthCard } from "@/components/dashboard/net-worth-card";
 import { AccountTiles } from "@/components/dashboard/account-tiles";
 import { CashflowCard } from "@/components/dashboard/cashflow-card";
@@ -16,7 +15,6 @@ export default function DashboardPage() {
     <>
       <Topbar title="Hey there 👋" description="Here's where your money stands today." />
       <main className="px-4 lg:px-8 py-6 space-y-6 max-w-[1400px] w-full">
-        <WelcomeBanner />
         <NetWorthCard />
         <AccountTiles />
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

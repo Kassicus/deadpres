@@ -1,10 +1,9 @@
 "use client";
 
 import * as React from "react";
-import { Plus, Sparkles, Trash2 } from "lucide-react";
+import { LogOut, Plus, User as UserIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { useFinance } from "@/lib/store";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,13 +13,22 @@ import {
   DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
 import { AddTransactionDialog } from "@/components/transactions/add-transaction-dialog";
-import { toast } from "sonner";
+import { useAuth } from "@/components/auth/auth-provider";
 
 export function Topbar({ title, description }: { title: string; description?: string }) {
-  const seedDemo = useFinance((s) => s.seedDemo);
-  const reset = useFinance((s) => s.reset);
-  const hasSeeded = useFinance((s) => s.hasSeeded);
+  const { user, signOut } = useAuth();
   const [open, setOpen] = React.useState(false);
+
+  const initials = (user?.user_metadata?.full_name as string | undefined)
+    ?.split(" ")
+    .map((s) => s[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase()
+    ?? user?.email?.[0]?.toUpperCase()
+    ?? "?";
+  const avatarUrl = user?.user_metadata?.avatar_url as string | undefined;
+  const displayName = (user?.user_metadata?.full_name as string | undefined) ?? user?.email ?? "Account";
 
   return (
     <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-border/50 bg-background/70 backdrop-blur-xl px-4 lg:px-8">
@@ -38,40 +46,35 @@ export function Topbar({ title, description }: { title: string; description?: st
           <span className="sm:hidden">Add</span>
         </Button>
 
+        <ThemeToggle />
+
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" aria-label="Menu">
-              <Sparkles />
-            </Button>
+            <button
+              className="size-9 rounded-full overflow-hidden border border-border/70 bg-card grid place-items-center text-xs font-semibold hover:scale-105 transition-transform focus:outline-none focus:ring-2 focus:ring-ring/40"
+              aria-label="User menu"
+            >
+              {avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={avatarUrl} alt="" className="size-full object-cover" referrerPolicy="no-referrer" />
+              ) : (
+                <span>{initials}</span>
+              )}
+            </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuLabel>Sample data</DropdownMenuLabel>
-            <DropdownMenuItem
-              onClick={() => {
-                seedDemo();
-                toast.success("Demo data loaded");
-              }}
-            >
-              <Sparkles />
-              {hasSeeded ? "Reload demo data" : "Load demo data"}
-            </DropdownMenuItem>
+            <DropdownMenuLabel>
+              <div className="flex items-center gap-2">
+                <UserIcon className="size-3.5" />
+                <span className="truncate normal-case tracking-normal text-foreground font-medium text-sm">{displayName}</span>
+              </div>
+            </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onClick={() => {
-                if (confirm("Clear all data? This cannot be undone.")) {
-                  reset();
-                  toast.success("All data cleared");
-                }
-              }}
-              className="text-destructive focus:text-destructive"
-            >
-              <Trash2 />
-              Reset everything
+            <DropdownMenuItem onClick={signOut} className="text-destructive focus:text-destructive">
+              <LogOut /> Sign out
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-
-        <ThemeToggle />
       </div>
 
       <AddTransactionDialog open={open} onOpenChange={setOpen} />

@@ -34,7 +34,7 @@ export function Sidebar() {
           <CircleDollarSign className="size-5" strokeWidth={2.5} />
         </div>
         <div className="flex flex-col leading-tight">
-          <span className="font-semibold tracking-tight">Pocket</span>
+          <span className="font-semibold tracking-tight">Dead Pres</span>
           <span className="text-[10px] uppercase tracking-widest text-muted-foreground">money os</span>
         </div>
       </div>

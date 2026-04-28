@@ -1,0 +1,73 @@
+"use client";
+
+import * as React from "react";
+import type { User } from "@supabase/supabase-js";
+import { createClient } from "@/lib/supabase/client";
+import { useFinance } from "@/lib/store";
+
+interface AuthContextValue {
+  user: User | null;
+  loading: boolean;
+  signOut: () => Promise<void>;
+}
+
+const AuthContext = React.createContext<AuthContextValue>({
+  user: null,
+  loading: true,
+  signOut: async () => {},
+});
+
+export function useAuth() {
+  return React.useContext(AuthContext);
+}
+
+export function AuthProvider({
+  initialUser,
+  children,
+}: {
+  initialUser: User | null;
+  children: React.ReactNode;
+}) {
+  const [user, setUser] = React.useState<User | null>(initialUser);
+  const [loading, setLoading] = React.useState(initialUser === null);
+  const loadAll = useFinance((s) => s.loadAll);
+  const clear = useFinance((s) => s.clear);
+
+  React.useEffect(() => {
+    const supabase = createClient();
+
+    if (initialUser) {
+      loadAll(initialUser.id).finally(() => setLoading(false));
+    } else {
+      setLoading(false);
+    }
+
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      const nextUser = session?.user ?? null;
+      setUser(nextUser);
+      if (event === "SIGNED_IN" && nextUser) {
+        loadAll(nextUser.id);
+      }
+      if (event === "SIGNED_OUT") {
+        clear();
+      }
+    });
+
+    return () => {
+      sub.subscription.unsubscribe();
+    };
+  }, [initialUser, loadAll, clear]);
+
+  const signOut = React.useCallback(async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    clear();
+    window.location.href = "/login";
+  }, [clear]);
+
+  return (
+    <AuthContext.Provider value={{ user, loading, signOut }}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
