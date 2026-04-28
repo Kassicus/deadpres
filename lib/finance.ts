@@ -1,4 +1,5 @@
-import type { Account, DebtStrategy, RecurrenceFrequency, Subscription, Transaction } from "./types";
+import type { Account, DebtStrategy, RecurrenceFrequency, RecurringDirection, RecurringPayment, Transaction } from "./types";
+import { approxMonthlyCount } from "./schedule";
 
 /* ---------- Recurrence helpers ---------- */
 
@@ -85,10 +86,24 @@ export function cashflow(txs: Transaction[]): { income: number; expense: number;
   return { income, expense, net: income - expense };
 }
 
-export function monthlySubscriptionsTotal(subs: Subscription[]): number {
-  return subs
+/**
+ * Monthly-equivalent total of a recurring payment, derived from its schedule.
+ * Returned positive regardless of direction.
+ */
+export function monthlyAmount(item: RecurringPayment): number {
+  return item.amount * approxMonthlyCount(item.schedule);
+}
+
+export function monthlyRecurringTotal(items: RecurringPayment[], direction?: RecurringDirection): number {
+  return items
     .filter((s) => s.active)
-    .reduce((sum, s) => sum + monthlyEquivalent(s.amount, s.frequency), 0);
+    .filter((s) => (direction ? s.direction === direction : true))
+    .reduce((sum, s) => sum + monthlyAmount(s), 0);
+}
+
+/** Net monthly recurring (income − expense) across active scheduled payments. */
+export function monthlyRecurringNet(items: RecurringPayment[]): number {
+  return monthlyRecurringTotal(items, "income") - monthlyRecurringTotal(items, "expense");
 }
 
 /* ---------- Compound interest / projections ---------- */

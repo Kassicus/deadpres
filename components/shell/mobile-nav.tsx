@@ -17,7 +17,7 @@ const NAV = [
   { href: "/", label: "Home", icon: LayoutDashboard },
   { href: "/accounts", label: "Accts", icon: Wallet },
   { href: "/transactions", label: "Tx", icon: ArrowLeftRight },
-  { href: "/subscriptions", label: "Subs", icon: Repeat },
+  { href: "/recurring", label: "Bills", icon: Repeat },
   { href: "/debt", label: "Debt", icon: Flame },
   { href: "/savings", label: "Goals", icon: Target },
   { href: "/projections", label: "Grow", icon: TrendingUp },

@@ -1,20 +1,20 @@
 "use client";
 
 import { create } from "zustand";
-import type { Account, DebtPlan, SavingsGoal, Subscription, Transaction } from "./types";
+import type { Account, DebtPlan, RecurringPayment, SavingsGoal, Transaction } from "./types";
 import { createClient } from "./supabase/client";
 import {
   accountToInsert,
   accountToUpdate,
   goalToInsert,
   goalToUpdate,
+  recurringPaymentToInsert,
+  recurringPaymentToUpdate,
   rowToAccount,
   rowToDebtPlan,
   rowToGoal,
-  rowToSubscription,
+  rowToRecurringPayment,
   rowToTransaction,
-  subscriptionToInsert,
-  subscriptionToUpdate,
   transactionToInsert,
   transactionToUpdate,
 } from "./supabase/mappers";
@@ -26,7 +26,7 @@ interface FinanceState {
   userId: string | null;
   accounts: Account[];
   transactions: Transaction[];
-  subscriptions: Subscription[];
+  recurringPayments: RecurringPayment[];
   goals: SavingsGoal[];
   debtPlan: DebtPlan;
 
@@ -42,9 +42,9 @@ interface FinanceState {
   updateTransaction: (id: string, patch: Partial<Transaction>) => Promise<void>;
   removeTransaction: (id: string) => Promise<void>;
 
-  addSubscription: (s: Omit<Subscription, "id" | "createdAt">) => Promise<Subscription | null>;
-  updateSubscription: (id: string, patch: Partial<Subscription>) => Promise<void>;
-  removeSubscription: (id: string) => Promise<void>;
+  addRecurringPayment: (s: Omit<RecurringPayment, "id" | "createdAt">) => Promise<RecurringPayment | null>;
+  updateRecurringPayment: (id: string, patch: Partial<RecurringPayment>) => Promise<void>;
+  removeRecurringPayment: (id: string) => Promise<void>;
 
   addGoal: (g: Omit<SavingsGoal, "id" | "createdAt">) => Promise<SavingsGoal | null>;
   updateGoal: (id: string, patch: Partial<SavingsGoal>) => Promise<void>;
@@ -64,7 +64,7 @@ export const useFinance = create<FinanceState>()((set, get) => ({
   userId: null,
   accounts: [],
   transactions: [],
-  subscriptions: [],
+  recurringPayments: [],
   goals: [],
   debtPlan: DEFAULT_PLAN,
 
@@ -75,7 +75,7 @@ export const useFinance = create<FinanceState>()((set, get) => ({
       userId: null,
       accounts: [],
       transactions: [],
-      subscriptions: [],
+      recurringPayments: [],
       goals: [],
       debtPlan: DEFAULT_PLAN,
       hydrated: false,
@@ -86,15 +86,15 @@ export const useFinance = create<FinanceState>()((set, get) => ({
     set({ loading: true });
     const supabase = createClient();
 
-    const [accountsRes, txRes, subsRes, goalsRes, planRes] = await Promise.all([
+    const [accountsRes, txRes, recRes, goalsRes, planRes] = await Promise.all([
       supabase.from("accounts").select("*").order("created_at", { ascending: true }),
       supabase.from("transactions").select("*").order("date", { ascending: false }),
-      supabase.from("subscriptions").select("*").order("next_charge_date", { ascending: true }),
+      supabase.from("recurring_payments").select("*").order("next_charge_date", { ascending: true }),
       supabase.from("savings_goals").select("*").order("created_at", { ascending: true }),
       supabase.from("debt_plans").select("*").eq("user_id", userId).maybeSingle(),
     ]);
 
-    const errors = [accountsRes.error, txRes.error, subsRes.error, goalsRes.error, planRes.error].filter(Boolean);
+    const errors = [accountsRes.error, txRes.error, recRes.error, goalsRes.error, planRes.error].filter(Boolean);
     if (errors.length) {
       toast.error("Couldn't load your data — try refreshing.");
       console.error("loadAll errors", errors);
@@ -106,7 +106,7 @@ export const useFinance = create<FinanceState>()((set, get) => ({
       userId,
       accounts: (accountsRes.data ?? []).map(rowToAccount),
       transactions: (txRes.data ?? []).map(rowToTransaction),
-      subscriptions: (subsRes.data ?? []).map(rowToSubscription),
+      recurringPayments: (recRes.data ?? []).map(rowToRecurringPayment),
       goals: (goalsRes.data ?? []).map(rowToGoal),
       debtPlan: planRes.data ? rowToDebtPlan(planRes.data) : DEFAULT_PLAN,
       hydrated: true,
@@ -151,7 +151,7 @@ export const useFinance = create<FinanceState>()((set, get) => ({
     set((s) => ({
       accounts: s.accounts.filter((x) => x.id !== id),
       transactions: s.transactions.filter((t) => t.accountId !== id && t.toAccountId !== id),
-      subscriptions: s.subscriptions.map((sub) => (sub.accountId === id ? { ...sub, accountId: undefined } : sub)),
+      recurringPayments: s.recurringPayments.map((r) => (r.accountId === id ? { ...r, accountId: undefined } : r)),
       goals: s.goals.map((g) => (g.accountId === id ? { ...g, accountId: undefined } : g)),
     }));
     const supabase = createClient();
@@ -161,7 +161,7 @@ export const useFinance = create<FinanceState>()((set, get) => ({
       set({
         accounts: prev.accounts,
         transactions: prev.transactions,
-        subscriptions: prev.subscriptions,
+        recurringPayments: prev.recurringPayments,
         goals: prev.goals,
       });
     }
@@ -219,47 +219,47 @@ export const useFinance = create<FinanceState>()((set, get) => ({
     }
   },
 
-  /* ---------- Subscriptions ---------- */
+  /* ---------- Recurring payments ---------- */
 
-  addSubscription: async (s) => {
+  addRecurringPayment: async (s) => {
     const userId = get().userId;
     if (!userId) return null;
     const supabase = createClient();
     const { data, error } = await supabase
-      .from("subscriptions")
-      .insert(subscriptionToInsert(s, userId))
+      .from("recurring_payments")
+      .insert(recurringPaymentToInsert(s, userId))
       .select()
       .single();
     if (error || !data) {
-      toast.error(error?.message ?? "Couldn't add subscription");
+      toast.error(error?.message ?? "Couldn't add recurring payment");
       return null;
     }
-    const sub = rowToSubscription(data);
-    set((st) => ({ subscriptions: [...st.subscriptions, sub] }));
-    return sub;
+    const item = rowToRecurringPayment(data);
+    set((st) => ({ recurringPayments: [...st.recurringPayments, item] }));
+    return item;
   },
 
-  updateSubscription: async (id, patch) => {
-    const prev = get().subscriptions.find((x) => x.id === id);
+  updateRecurringPayment: async (id, patch) => {
+    const prev = get().recurringPayments.find((x) => x.id === id);
     if (!prev) return;
-    set((s) => ({ subscriptions: s.subscriptions.map((x) => (x.id === id ? { ...x, ...patch } : x)) }));
+    set((s) => ({ recurringPayments: s.recurringPayments.map((x) => (x.id === id ? { ...x, ...patch } : x)) }));
     const supabase = createClient();
-    const { error } = await supabase.from("subscriptions").update(subscriptionToUpdate(patch)).eq("id", id);
+    const { error } = await supabase.from("recurring_payments").update(recurringPaymentToUpdate(patch)).eq("id", id);
     if (error) {
       toast.error(error.message);
-      set((s) => ({ subscriptions: s.subscriptions.map((x) => (x.id === id ? prev : x)) }));
+      set((s) => ({ recurringPayments: s.recurringPayments.map((x) => (x.id === id ? prev : x)) }));
     }
   },
 
-  removeSubscription: async (id) => {
-    const prev = get().subscriptions.find((x) => x.id === id);
+  removeRecurringPayment: async (id) => {
+    const prev = get().recurringPayments.find((x) => x.id === id);
     if (!prev) return;
-    set((s) => ({ subscriptions: s.subscriptions.filter((x) => x.id !== id) }));
+    set((s) => ({ recurringPayments: s.recurringPayments.filter((x) => x.id !== id) }));
     const supabase = createClient();
-    const { error } = await supabase.from("subscriptions").delete().eq("id", id);
+    const { error } = await supabase.from("recurring_payments").delete().eq("id", id);
     if (error) {
       toast.error(error.message);
-      set((s) => ({ subscriptions: [...s.subscriptions, prev] }));
+      set((s) => ({ recurringPayments: [...s.recurringPayments, prev] }));
     }
   },
 

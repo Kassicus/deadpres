@@ -4,6 +4,7 @@ import * as React from "react";
 import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import { useFinance } from "@/lib/store";
+import { postDueOccurrences } from "@/lib/auto-post";
 
 interface AuthContextValue {
   user: User | null;
@@ -36,8 +37,15 @@ export function AuthProvider({
   React.useEffect(() => {
     const supabase = createClient();
 
+    async function bootstrap(uid: string) {
+      // Run auto-poster *before* loadAll so freshly posted txs show up in the initial fetch.
+      await postDueOccurrences(uid).catch((e) => console.error("auto-post error", e));
+      await loadAll(uid);
+      setLoading(false);
+    }
+
     if (initialUser) {
-      loadAll(initialUser.id).finally(() => setLoading(false));
+      bootstrap(initialUser.id);
     } else {
       setLoading(false);
     }
@@ -46,7 +54,7 @@ export function AuthProvider({
       const nextUser = session?.user ?? null;
       setUser(nextUser);
       if (event === "SIGNED_IN" && nextUser) {
-        loadAll(nextUser.id);
+        bootstrap(nextUser.id);
       }
       if (event === "SIGNED_OUT") {
         clear();

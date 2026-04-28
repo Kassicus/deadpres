@@ -67,19 +67,24 @@ export type RecurrenceFrequency =
   | "quarterly"
   | "yearly";
 
-export interface Subscription {
+export type RecurringDirection = "income" | "expense";
+
+export interface RecurringPayment {
   id: string;
   name: string;
   amount: number;
-  frequency: RecurrenceFrequency;
+  direction: RecurringDirection;
+  schedule: import("./schedule").Schedule;
   category: string;
   accountId?: string;
-  nextChargeDate: string; // ISO
+  nextChargeDate: string; // ISO; denormalized for cheap queries
   startDate: string; // ISO
   active: boolean;
   notes?: string;
   color: AccountColor;
   icon?: string;
+  /** Timestamp through which the auto-poster has already created transactions. */
+  postedThrough?: string;
   createdAt: string;
 }
 

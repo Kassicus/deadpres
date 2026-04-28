@@ -5,18 +5,20 @@ import type {
   AccountType,
   DebtPlan,
   RecurrenceFrequency,
+  RecurringDirection,
+  RecurringPayment,
   SavingsGoal,
-  Subscription,
   Transaction,
   TransactionType,
 } from "@/lib/types";
+import type { Schedule } from "@/lib/schedule";
 
 type AccountRow = Database["public"]["Tables"]["accounts"]["Row"];
 type AccountInsert = Database["public"]["Tables"]["accounts"]["Insert"];
 type TransactionRow = Database["public"]["Tables"]["transactions"]["Row"];
 type TransactionInsert = Database["public"]["Tables"]["transactions"]["Insert"];
-type SubscriptionRow = Database["public"]["Tables"]["subscriptions"]["Row"];
-type SubscriptionInsert = Database["public"]["Tables"]["subscriptions"]["Insert"];
+type RecurringPaymentRow = Database["public"]["Tables"]["recurring_payments"]["Row"];
+type RecurringPaymentInsert = Database["public"]["Tables"]["recurring_payments"]["Insert"];
 type GoalRow = Database["public"]["Tables"]["savings_goals"]["Row"];
 type GoalInsert = Database["public"]["Tables"]["savings_goals"]["Insert"];
 type DebtPlanRow = Database["public"]["Tables"]["debt_plans"]["Row"];
@@ -134,14 +136,15 @@ export function transactionToUpdate(patch: Partial<Transaction>): Database["publ
   return u;
 }
 
-/* ---------- Subscriptions ---------- */
+/* ---------- Recurring payments ---------- */
 
-export function rowToSubscription(r: SubscriptionRow): Subscription {
+export function rowToRecurringPayment(r: RecurringPaymentRow): RecurringPayment {
   return {
     id: r.id,
     name: r.name,
     amount: toNum(r.amount),
-    frequency: r.frequency as RecurrenceFrequency,
+    direction: r.direction as RecurringDirection,
+    schedule: r.schedule as Schedule,
     category: r.category,
     accountId: r.account_id ?? undefined,
     nextChargeDate: r.next_charge_date,
@@ -150,16 +153,18 @@ export function rowToSubscription(r: SubscriptionRow): Subscription {
     notes: r.notes ?? undefined,
     color: r.color as AccountColor,
     icon: r.icon ?? undefined,
+    postedThrough: r.posted_through ?? undefined,
     createdAt: r.created_at,
   };
 }
 
-export function subscriptionToInsert(s: Omit<Subscription, "id" | "createdAt">, userId: string): SubscriptionInsert {
+export function recurringPaymentToInsert(s: Omit<RecurringPayment, "id" | "createdAt">, userId: string): RecurringPaymentInsert {
   return {
     user_id: userId,
     name: s.name,
     amount: s.amount,
-    frequency: s.frequency,
+    direction: s.direction,
+    schedule: s.schedule,
     category: s.category,
     account_id: s.accountId ?? null,
     next_charge_date: s.nextChargeDate,
@@ -168,20 +173,23 @@ export function subscriptionToInsert(s: Omit<Subscription, "id" | "createdAt">, 
     notes: s.notes ?? null,
     color: s.color,
     icon: s.icon ?? null,
+    posted_through: s.postedThrough ?? null,
   };
 }
 
-export function subscriptionToUpdate(patch: Partial<Subscription>): Database["public"]["Tables"]["subscriptions"]["Update"] {
-  const u: Database["public"]["Tables"]["subscriptions"]["Update"] = {};
+export function recurringPaymentToUpdate(patch: Partial<RecurringPayment>): Database["public"]["Tables"]["recurring_payments"]["Update"] {
+  const u: Database["public"]["Tables"]["recurring_payments"]["Update"] = {};
   if (patch.name !== undefined) u.name = patch.name;
   if (patch.amount !== undefined) u.amount = patch.amount;
-  if (patch.frequency !== undefined) u.frequency = patch.frequency;
+  if (patch.direction !== undefined) u.direction = patch.direction;
+  if (patch.schedule !== undefined) u.schedule = patch.schedule;
   if (patch.category !== undefined) u.category = patch.category;
   if (patch.accountId !== undefined) u.account_id = patch.accountId ?? null;
   if (patch.nextChargeDate !== undefined) u.next_charge_date = patch.nextChargeDate;
   if (patch.startDate !== undefined) u.start_date = patch.startDate;
   if (patch.active !== undefined) u.active = patch.active;
   if (patch.notes !== undefined) u.notes = patch.notes ?? null;
+  if (patch.postedThrough !== undefined) u.posted_through = patch.postedThrough ?? null;
   if (patch.color !== undefined) u.color = patch.color;
   if (patch.icon !== undefined) u.icon = patch.icon ?? null;
   return u;

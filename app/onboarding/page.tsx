@@ -246,8 +246,8 @@ export default function OnboardingPage() {
               />
               <TourItem
                 icon={PiggyBank}
-                title="Transactions & Subscriptions"
-                description="Log expenses with the “Add transaction” button. Add recurring charges so they never sneak up."
+                title="Transactions & Recurring"
+                description="Log expenses with the “Add transaction” button. Add bills and subscriptions so they never sneak up."
                 tint="var(--mint)"
               />
               <TourItem

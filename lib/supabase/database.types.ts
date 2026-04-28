@@ -65,12 +65,14 @@ type TransactionInsert = {
   created_at?: string;
 };
 
-type SubscriptionRow = {
+type RecurringPaymentRow = {
   id: string;
   user_id: string;
   name: string;
   amount: number;
-  frequency: "daily" | "weekly" | "biweekly" | "monthly" | "quarterly" | "yearly";
+  direction: "income" | "expense";
+  schedule: unknown;
+  posted_through: string | null;
   category: string;
   account_id: string | null;
   next_charge_date: string;
@@ -81,12 +83,14 @@ type SubscriptionRow = {
   icon: string | null;
   created_at: string;
 };
-type SubscriptionInsert = {
+type RecurringPaymentInsert = {
   id?: string;
   user_id: string;
   name: string;
   amount: number;
-  frequency: "daily" | "weekly" | "biweekly" | "monthly" | "quarterly" | "yearly";
+  direction?: "income" | "expense";
+  schedule: unknown;
+  posted_through?: string | null;
   category?: string;
   account_id?: string | null;
   next_charge_date: string;
@@ -160,7 +164,7 @@ export type Database = {
     Tables: {
       accounts: { Row: AccountRow; Insert: AccountInsert; Update: Partial<AccountInsert>; Relationships: [] };
       transactions: { Row: TransactionRow; Insert: TransactionInsert; Update: Partial<TransactionInsert>; Relationships: [] };
-      subscriptions: { Row: SubscriptionRow; Insert: SubscriptionInsert; Update: Partial<SubscriptionInsert>; Relationships: [] };
+      recurring_payments: { Row: RecurringPaymentRow; Insert: RecurringPaymentInsert; Update: Partial<RecurringPaymentInsert>; Relationships: [] };
       savings_goals: { Row: GoalRow; Insert: GoalInsert; Update: Partial<GoalInsert>; Relationships: [] };
       debt_plans: { Row: DebtPlanRow; Insert: DebtPlanInsert; Update: Partial<DebtPlanInsert>; Relationships: [] };
       profiles: { Row: ProfileRow; Insert: ProfileInsert; Update: Partial<ProfileInsert>; Relationships: [] };
