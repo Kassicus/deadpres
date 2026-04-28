@@ -30,7 +30,7 @@ export default function AccountsPage() {
   return (
     <>
       <Topbar title="Accounts" description="All your money in one place." />
-      <main className="px-4 lg:px-8 py-6 max-w-[1400px] w-full">
+      <main className="px-4 lg:px-8 py-6 max-w-[1400px] w-full mx-auto">
         <PageHeader
           title="Accounts"
           description="Track every account: cash, savings, credit, loans, and investments."

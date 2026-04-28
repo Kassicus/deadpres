@@ -61,7 +61,7 @@ export default function TransactionsPage() {
   return (
     <>
       <Topbar title="Transactions" description="Search, filter, and manage every transaction." />
-      <main className="px-4 lg:px-8 py-6 max-w-[1400px] w-full">
+      <main className="px-4 lg:px-8 py-6 max-w-[1400px] w-full mx-auto">
         <PageHeader
           title="Transactions"
           description={`${filtered.length} ${filtered.length === 1 ? "transaction" : "transactions"} matching filters`}

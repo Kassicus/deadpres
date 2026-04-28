@@ -112,7 +112,7 @@ export default function DebtPage() {
     return (
       <>
         <Topbar title="Debt payoff" description="Plan your way out of debt." />
-        <main className="px-4 lg:px-8 py-6 max-w-[1400px] w-full">
+        <main className="px-4 lg:px-8 py-6 max-w-[1400px] w-full mx-auto">
           <EmptyState
             icon={Flame}
             title="No debts to pay off"
@@ -126,7 +126,7 @@ export default function DebtPage() {
   return (
     <>
       <Topbar title="Debt payoff" description="Compare strategies, save interest, see the finish line." />
-      <main className="px-4 lg:px-8 py-6 max-w-[1400px] w-full space-y-6">
+      <main className="px-4 lg:px-8 py-6 max-w-[1400px] w-full mx-auto space-y-6">
         <PageHeader title="Debt payoff" description="Plan a strategy, throw extra at debt, watch the timeline shrink." />
 
         {/* Hero stats */}

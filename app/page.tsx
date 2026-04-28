@@ -14,7 +14,7 @@ export default function DashboardPage() {
   return (
     <>
       <Topbar title="Hey there 👋" description="Here's where your money stands today." />
-      <main className="px-4 lg:px-8 py-6 space-y-6 max-w-[1400px] w-full">
+      <main className="px-4 lg:px-8 py-6 space-y-6 max-w-[1400px] w-full mx-auto">
         <NetWorthCard />
         <AccountTiles />
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">

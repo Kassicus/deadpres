@@ -62,7 +62,7 @@ export default function ProjectionsPage() {
   return (
     <>
       <Topbar title="Projections" description="See where your money could grow." />
-      <main className="px-4 lg:px-8 py-6 max-w-[1400px] w-full space-y-6">
+      <main className="px-4 lg:px-8 py-6 max-w-[1400px] w-full mx-auto space-y-6">
         <PageHeader
           title="Growth projections"
           description="Run what-ifs on your savings and investments. Compound interest is your best friend."

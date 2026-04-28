@@ -49,7 +49,7 @@ export default function SavingsPage() {
   return (
     <>
       <Topbar title="Savings goals" description="Save up for what matters." />
-      <main className="px-4 lg:px-8 py-6 max-w-[1400px] w-full">
+      <main className="px-4 lg:px-8 py-6 max-w-[1400px] w-full mx-auto">
         <PageHeader
           title="Savings goals"
           description={goals.length === 0 ? "Track and project your savings goals." : `${goals.length} goal${goals.length === 1 ? "" : "s"} · ${formatCurrency(totalSaved)} saved of ${formatCurrency(totalTarget)}`}

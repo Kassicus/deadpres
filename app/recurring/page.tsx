@@ -72,7 +72,7 @@ export default function RecurringPage() {
   return (
     <>
       <Topbar title="Recurring payments" description="Bills, subscriptions, paychecks — schedule everything that repeats." />
-      <main className="px-4 lg:px-8 py-6 max-w-[1400px] w-full">
+      <main className="px-4 lg:px-8 py-6 max-w-[1400px] w-full mx-auto">
         <PageHeader
           title="Recurring"
           description={`${active.length} active`}
