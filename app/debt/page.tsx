@@ -1,16 +1,16 @@
 "use client";
 
 import * as React from "react";
-import { Flame, TrendingDown, CalendarRange, DollarSign, Sparkles, ArrowDown } from "lucide-react";
+import { motion, LayoutGroup } from "framer-motion";
+import { Flame, TrendingDown, CalendarRange, DollarSign, Sparkles, ArrowDown, AlertTriangle } from "lucide-react";
 import { Topbar } from "@/components/shell/topbar";
 import { PageHeader } from "@/components/shell/page-header";
 import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Slider } from "@/components/ui/slider";
 import { useFinance } from "@/lib/store";
-import { simulateDebtPayoff, compareStrategies, type DebtScheduleAccount } from "@/lib/finance";
+import { simulateDebtPayoff, compareStrategies, orderDebts, type DebtScheduleAccount } from "@/lib/finance";
 import type { DebtStrategy } from "@/lib/types";
 import { COLOR_HEX } from "@/lib/colors";
 import { formatCurrency } from "@/lib/format";
@@ -62,20 +62,36 @@ export default function DebtPage() {
   const totalDebt = debts.reduce((s, d) => s + d.startingBalance, 0);
   const totalMin = debts.reduce((s, d) => s + d.minimumPayment, 0);
 
+  // Active strategy with snowball/avalanche rollover (freed minimums roll into the cascade).
   const result = React.useMemo(() => {
     if (debts.length === 0) return null;
     return simulateDebtPayoff(debts, plan.strategy, plan.extraPerMonth, plan.customOrder);
   }, [debts, plan]);
 
+  // True "minimums only" baseline: no extra, no rollover. Mirrors the alternative where
+  // you stop paying a debt the moment it hits zero and never redirect that money.
   const minOnly = React.useMemo(() => {
     if (debts.length === 0) return null;
-    return simulateDebtPayoff(debts, plan.strategy, 0, plan.customOrder);
+    return simulateDebtPayoff(debts, plan.strategy, 0, plan.customOrder, { rolloverFreedMinimums: false });
   }, [debts, plan.strategy, plan.customOrder]);
 
-  const comparison = React.useMemo(() => (debts.length === 0 ? [] : compareStrategies(debts, plan.extraPerMonth, plan.customOrder)), [debts, plan.extraPerMonth, plan.customOrder]);
+  // Strategy ordering for the rank badges and the per-debt list.
+  const orderedDebts = React.useMemo(
+    () => orderDebts(debts, plan.strategy, plan.customOrder),
+    [debts, plan.strategy, plan.customOrder],
+  );
+
+  const comparison = React.useMemo(
+    () => (debts.length === 0 ? [] : compareStrategies(debts, plan.extraPerMonth, plan.customOrder)),
+    [debts, plan.extraPerMonth, plan.customOrder],
+  );
 
   const interestSaved = (minOnly?.totalInterest ?? 0) - (result?.totalInterest ?? 0);
   const monthsSaved = (minOnly?.payoffMonth ?? 0) - (result?.payoffMonth ?? 0);
+
+  // Surface debts whose minimum payment can't even cover monthly interest.
+  const underwaterIds = result?.debtsBelowInterest ?? [];
+  const underwaterDebts = debts.filter((d) => underwaterIds.includes(d.id));
 
   const chartData = React.useMemo(() => {
     if (!result) return [];
@@ -120,7 +136,8 @@ export default function DebtPage() {
           <HeroStat
             icon={TrendingDown}
             label="Debt-free in"
-            value={result ? formatMonths(result.payoffMonth) : "—"}
+            value={result ? (result.hitCap ? "Never" : formatMonths(result.payoffMonth)) : "—"}
+            sublabel={result?.hitCap ? "Bump up extra to break even" : undefined}
             color="var(--mint)"
           />
           <HeroStat
@@ -147,7 +164,7 @@ export default function DebtPage() {
               <ResponsiveContainer>
                 <ReAreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                   <defs>
-                    {debts.map((d) => (
+                    {orderedDebts.map((d) => (
                       <linearGradient key={d.id} id={`grad-${d.id}`} x1="0" y1="0" x2="0" y2="1">
                         <stop offset="0%" stopColor={d.color} stopOpacity={0.6} />
                         <stop offset="100%" stopColor={d.color} stopOpacity={0.05} />
@@ -173,12 +190,12 @@ export default function DebtPage() {
                     content={({ active, payload, label }) => {
                       if (!active || !payload?.length) return null;
                       return (
-                        <div className="rounded-lg border border-border/70 bg-popover px-3 py-2 text-xs shadow-xl min-w-[160px]">
+                        <div className="rounded-lg border border-border/70 bg-popover px-3 py-2 text-xs shadow-xl min-w-[180px]">
                           <div className="font-medium mb-1.5">Month {label}</div>
                           {payload
-                            .filter((p) => (p.value as number) > 0)
+                            .filter((p) => (p.value as number) > 0.005)
                             .map((p) => {
-                              const d = debts.find((x) => x.id === p.dataKey);
+                              const d = orderedDebts.find((x) => x.id === p.dataKey);
                               if (!d) return null;
                               return (
                                 <div key={String(p.dataKey)} className="flex items-center gap-2 text-muted-foreground">
@@ -190,19 +207,26 @@ export default function DebtPage() {
                                 </div>
                               );
                             })}
+                          {payload.every((p) => (p.value as number) <= 0.005) && (
+                            <div className="text-success font-medium">All paid off 🎉</div>
+                          )}
                         </div>
                       );
                     }}
                   />
-                  {debts.map((d) => (
+                  {/* Render in priority order so #1 sits at the bottom of the stack and visibly
+                      deflates to zero first when paid off. stepAfter is the truthful interpolation
+                      for monthly snapshots — balances change discretely at month boundaries. */}
+                  {orderedDebts.map((d) => (
                     <Area
                       key={d.id}
-                      type="monotone"
+                      type="stepAfter"
                       dataKey={d.id}
                       stackId="a"
                       stroke={d.color}
                       strokeWidth={1.5}
                       fill={`url(#grad-${d.id})`}
+                      isAnimationActive={false}
                     />
                   ))}
                 </ReAreaChart>
@@ -210,10 +234,13 @@ export default function DebtPage() {
             </div>
 
             <div className="flex flex-wrap gap-3 mt-2">
-              {debts.map((d) => (
+              {orderedDebts.map((d, i) => (
                 <div key={d.id} className="flex items-center gap-1.5 text-xs">
                   <span className="size-2.5 rounded-full" style={{ background: d.color }} />
-                  <span className="text-muted-foreground">{d.name}</span>
+                  <span className="text-muted-foreground">
+                    <span className="text-foreground/60 num mr-1">#{i + 1}</span>
+                    {d.name}
+                  </span>
                 </div>
               ))}
             </div>
@@ -290,40 +317,94 @@ export default function DebtPage() {
           </Card>
         </div>
 
-        {/* Per-debt schedule */}
-        <Card className="p-5">
-          <h3 className="font-semibold tracking-tight mb-4">Order &amp; payoff</h3>
-          <div className="space-y-2">
-            {debts.map((d, i) => {
-              const order = result ? Object.entries(result.perAccountPayoffMonth).sort((a, b) => a[1] - b[1]).findIndex(([id]) => id === d.id) : -1;
-              const payoffM = result?.perAccountPayoffMonth[d.id];
-              const interest = result?.months[result.months.length - 1]?.byAccount[d.id]?.interest ?? 0;
-              const totalPaid = result?.months[result.months.length - 1]?.byAccount[d.id]?.paid ?? 0;
-              return (
-                <div key={d.id} className="flex items-center gap-3 rounded-xl border border-border/60 bg-card/60 p-3">
-                  <div className="size-8 rounded-lg grid place-items-center text-sm font-semibold text-background" style={{ background: d.color }}>
-                    {order >= 0 ? order + 1 : "?"}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium truncate">{d.name}</div>
-                    <div className="text-xs text-muted-foreground">
-                      <span className="num">{formatCurrency(d.startingBalance)}</span> · {d.apr}% APR · min{" "}
-                      <span className="num">{formatCurrency(d.minimumPayment)}</span>/mo
-                    </div>
-                  </div>
-                  <div className="text-right text-sm">
-                    <div className="num font-medium">{payoffM ? formatMonths(payoffM) : "—"}</div>
-                    <div className="text-[11px] text-muted-foreground num">
-                      pay <span className="text-foreground">{formatCurrency(totalPaid, { compact: true })}</span> · interest{" "}
-                      <span className="text-coral">{formatCurrency(interest, { compact: true })}</span>
-                    </div>
-                  </div>
+        {/* Underwater warning: minimums below monthly interest */}
+        {underwaterDebts.length > 0 && (
+          <Card className="p-4 border-warning/30 bg-warning/5">
+            <div className="flex items-start gap-3">
+              <div className="size-8 rounded-lg grid place-items-center bg-warning/15 text-warning shrink-0">
+                <AlertTriangle className="size-4" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="font-medium text-sm">
+                  {underwaterDebts.length === 1 ? "A debt" : `${underwaterDebts.length} debts`} can&apos;t keep up with interest
                 </div>
-              );
-            })}
-          </div>
+                <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                  The minimum payment is at or below the monthly interest, so without extra it would grow forever.
+                  Throwing extra at it (avalanche style) is the only way to make progress.
+                </p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {underwaterDebts.map((d) => {
+                    const monthlyInterest = (d.startingBalance * d.apr) / 100 / 12;
+                    return (
+                      <div key={d.id} className="text-[11px] rounded-md bg-card/60 border border-border px-2 py-1 num">
+                        <span className="font-medium">{d.name}</span>
+                        <span className="text-muted-foreground"> · min {formatCurrency(d.minimumPayment)} vs interest {formatCurrency(monthlyInterest)}/mo</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </Card>
+        )}
+
+        {/* Per-debt schedule, in strategy priority order */}
+        <Card className="p-5">
+          <h3 className="font-semibold tracking-tight mb-1">Order &amp; payoff</h3>
+          <p className="text-xs text-muted-foreground mb-4">
+            Debts attacked first by the {STRATEGY_LABELS[plan.strategy]} strategy. Each row shows what happens with your current plan.
+          </p>
+          <LayoutGroup>
+            <motion.ul className="space-y-2 list-none p-0 m-0">
+              {orderedDebts.map((d, i) => {
+                const lastMonth = result?.months[result.months.length - 1];
+                const payoffM = result?.perAccountPayoffMonth[d.id];
+                const interest = lastMonth?.byAccount[d.id]?.interest ?? 0;
+                const totalPaid = lastMonth?.byAccount[d.id]?.paid ?? 0;
+                const monthlyInterest = (d.startingBalance * d.apr) / 100 / 12;
+                const isUnderwater = underwaterIds.includes(d.id);
+                return (
+                  <motion.li
+                    key={d.id}
+                    layout="position"
+                    transition={{ type: "spring", stiffness: 380, damping: 32 }}
+                    className="flex items-center gap-3 rounded-xl border border-border/60 bg-card/60 p-3"
+                  >
+                    <motion.div
+                      layout="position"
+                      className="size-9 rounded-lg grid place-items-center text-sm font-bold text-background shrink-0 shadow-sm"
+                      style={{ background: d.color }}
+                      aria-label={`Priority ${i + 1}`}
+                    >
+                      {i + 1}
+                    </motion.div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-medium truncate">{d.name}</span>
+                        {isUnderwater && <AlertTriangle className="size-3.5 text-warning shrink-0" aria-label="Minimum below interest" />}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        <span className="num">{formatCurrency(d.startingBalance)}</span> · {d.apr.toFixed(2)}% APR · min{" "}
+                        <span className="num">{formatCurrency(d.minimumPayment)}</span>/mo
+                        <span className="text-muted-foreground/70"> · interest <span className="num">{formatCurrency(monthlyInterest)}</span>/mo</span>
+                      </div>
+                    </div>
+                    <div className="text-right text-sm shrink-0">
+                      <div className="num font-medium">
+                        {payoffM ? formatMonths(payoffM) : result?.hitCap ? "Never" : "—"}
+                      </div>
+                      <div className="text-[11px] text-muted-foreground num">
+                        pay <span className="text-foreground">{formatCurrency(totalPaid, { compact: true })}</span> · interest{" "}
+                        <span className="text-coral">{formatCurrency(interest, { compact: true })}</span>
+                      </div>
+                    </div>
+                  </motion.li>
+                );
+              })}
+            </motion.ul>
+          </LayoutGroup>
           <div className="flex items-center gap-2 mt-3 text-xs text-muted-foreground">
-            <ArrowDown className="size-3.5" /> Lower numbers get the extra payment first.
+            <ArrowDown className="size-3.5" /> Top of the list is attacked first. Switch strategy above to reorder.
           </div>
         </Card>
       </main>

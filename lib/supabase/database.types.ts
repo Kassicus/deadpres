@@ -16,6 +16,7 @@ type AccountRow = {
   icon: string | null;
   notes: string | null;
   archived: boolean;
+  balance_updated_at: string;
   created_at: string;
 };
 type AccountInsert = {
@@ -33,6 +34,7 @@ type AccountInsert = {
   icon?: string | null;
   notes?: string | null;
   archived?: boolean;
+  balance_updated_at?: string;
   created_at?: string;
 };
 

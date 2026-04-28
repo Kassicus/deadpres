@@ -34,7 +34,7 @@ interface FinanceState {
   loadAll: (userId: string) => Promise<void>;
   clear: () => void;
 
-  addAccount: (a: Omit<Account, "id" | "createdAt">) => Promise<Account | null>;
+  addAccount: (a: Omit<Account, "id" | "createdAt" | "balanceUpdatedAt">) => Promise<Account | null>;
   updateAccount: (id: string, patch: Partial<Account>) => Promise<void>;
   removeAccount: (id: string) => Promise<void>;
 
@@ -137,9 +137,18 @@ export const useFinance = create<FinanceState>()((set, get) => ({
   updateAccount: async (id, patch) => {
     const prev = get().accounts.find((a) => a.id === id);
     if (!prev) return;
-    set((s) => ({ accounts: s.accounts.map((x) => (x.id === id ? { ...x, ...patch } : x)) }));
+
+    // Stamp balanceUpdatedAt whenever the balance is being changed by the user,
+    // unless the caller is explicitly setting it themselves.
+    const balanceChanged = patch.balance !== undefined && patch.balance !== prev.balance;
+    const finalPatch: Partial<Account> = { ...patch };
+    if (balanceChanged && patch.balanceUpdatedAt === undefined) {
+      finalPatch.balanceUpdatedAt = new Date().toISOString();
+    }
+
+    set((s) => ({ accounts: s.accounts.map((x) => (x.id === id ? { ...x, ...finalPatch } : x)) }));
     const supabase = createClient();
-    const { error } = await supabase.from("accounts").update(accountToUpdate(patch)).eq("id", id);
+    const { error } = await supabase.from("accounts").update(accountToUpdate(finalPatch)).eq("id", id);
     if (error) {
       toast.error(error.message);
       set((s) => ({ accounts: s.accounts.map((x) => (x.id === id ? prev : x)) }));
@@ -333,9 +342,17 @@ export const useFinance = create<FinanceState>()((set, get) => ({
 }));
 
 /* ---------- Account balance side-effect ----------
-   When a transaction is added/removed, adjust the relevant account balances
-   in the local store AND persist to Supabase.
+   Credit cards and loans are user-managed: their balance is whatever the user
+   last said it was (the lender is the source of truth, the app only logs the
+   user's transactions for category/cashflow tracking). So we skip those.
+
+   For asset accounts (checking, savings, cash, investment) we still keep the
+   running balance up to date as transactions are added/removed.
 */
+
+function isLiabilityAccount(a: { type: Account["type"] }): boolean {
+  return a.type === "credit" || a.type === "loan";
+}
 
 async function applyTransactionToBalance(tx: Transaction, op: "add" | "remove") {
   const sign = op === "add" ? 1 : -1;
@@ -345,21 +362,32 @@ async function applyTransactionToBalance(tx: Transaction, op: "add" | "remove") 
   const from = accounts.find((a) => a.id === tx.accountId);
   if (!from) return;
 
-  const isLiability = from.type === "credit" || from.type === "loan";
-
   if (tx.type === "expense") {
-    updates.set(from.id, from.balance + (isLiability ? +tx.amount : -tx.amount) * sign);
+    if (!isLiabilityAccount(from)) {
+      updates.set(from.id, from.balance + -tx.amount * sign);
+    }
   } else if (tx.type === "income") {
-    updates.set(from.id, from.balance + (isLiability ? -tx.amount : +tx.amount) * sign);
+    if (!isLiabilityAccount(from)) {
+      updates.set(from.id, from.balance + +tx.amount * sign);
+    }
   } else if (tx.type === "transfer" && tx.toAccountId) {
     const to = accounts.find((a) => a.id === tx.toAccountId);
     if (!to) return;
-    updates.set(from.id, from.balance + (isLiability ? -tx.amount : -tx.amount) * sign);
-    const toIsLiab = to.type === "credit" || to.type === "loan";
-    updates.set(to.id, to.balance + (toIsLiab ? -tx.amount : +tx.amount) * sign);
+    // Source side: only debit asset sources. A "transfer from a credit card" (cash
+    // advance) doesn't credit the card here — the user reconciles it manually.
+    if (!isLiabilityAccount(from)) {
+      updates.set(from.id, from.balance + -tx.amount * sign);
+    }
+    // Destination side: only credit asset destinations. Paying off a credit card
+    // doesn't debit the card here — same reconciliation rule.
+    if (!isLiabilityAccount(to)) {
+      updates.set(to.id, to.balance + +tx.amount * sign);
+    }
   }
 
-  // Local update first (optimistic), then persist
+  if (updates.size === 0) return;
+
+  // Local optimistic update, then persist.
   useFinance.setState((s) => ({
     accounts: s.accounts.map((a) =>
       updates.has(a.id) ? { ...a, balance: round2(updates.get(a.id)!) } : a,

@@ -106,6 +106,24 @@ export function monthlyRecurringNet(items: RecurringPayment[]): number {
   return monthlyRecurringTotal(items, "income") - monthlyRecurringTotal(items, "expense");
 }
 
+/** True for credit cards and loans — accounts whose balance the user reconciles manually. */
+export function isUserManagedBalance(account: Pick<Account, "type">): boolean {
+  return account.type === "credit" || account.type === "loan";
+}
+
+/**
+ * Count transactions touching a user-managed account that landed since the last
+ * balance reconciliation. Used to surface a "stale — N transactions since last update"
+ * indicator on credit cards and loans.
+ */
+export function transactionsSinceBalanceUpdate(account: Account, txs: Transaction[]): Transaction[] {
+  const since = new Date(account.balanceUpdatedAt).getTime();
+  return txs.filter((t) => {
+    if (t.accountId !== account.id && t.toAccountId !== account.id) return false;
+    return new Date(t.date).getTime() > since;
+  });
+}
+
 /* ---------- Compound interest / projections ---------- */
 
 export interface ProjectionPoint {
@@ -186,10 +204,15 @@ export interface DebtMonth {
 
 export interface DebtScheduleResult {
   months: DebtMonth[];
+  /** 0 means already debt-free; payoffMonth === maxMonths means simulation hit cap. */
   payoffMonth: number;
+  /** True if a debt's minimum payment is less than (or equal to) its monthly interest. */
+  hitCap: boolean;
   totalInterest: number;
   totalPaid: number;
   perAccountPayoffMonth: Record<string, number>;
+  /** Debts whose minimum payment can't cover the monthly interest. */
+  debtsBelowInterest: string[];
 }
 
 export function orderDebts(debts: DebtScheduleAccount[], strategy: DebtStrategy, customOrder?: string[]): DebtScheduleAccount[] {
@@ -212,14 +235,26 @@ export function orderDebts(debts: DebtScheduleAccount[], strategy: DebtStrategy,
   return arr;
 }
 
+export interface SimulateOptions {
+  /**
+   * Snowball/avalanche behavior: when a debt is paid off, its freed minimum
+   * stays in the budget and rolls into the next priority debt. Default true.
+   * Set false for a true "minimums-only" baseline where freed mins are not redirected.
+   */
+  rolloverFreedMinimums?: boolean;
+  maxMonths?: number;
+}
+
 export function simulateDebtPayoff(
   debts: DebtScheduleAccount[],
   strategy: DebtStrategy,
   extraPerMonth: number,
   customOrder?: string[],
-  maxMonths = 600,
+  options: SimulateOptions = {},
 ): DebtScheduleResult {
+  const { rolloverFreedMinimums = true, maxMonths = 600 } = options;
   const ordered = orderDebts(debts, strategy, customOrder);
+
   const balances: Record<string, number> = {};
   const paidPerAccount: Record<string, number> = {};
   const interestPerAccount: Record<string, number> = {};
@@ -231,9 +266,21 @@ export function simulateDebtPayoff(
     interestPerAccount[d.id] = 0;
   }
 
-  const months: DebtMonth[] = [];
+  // Initial committed budget. For rollover strategies this is the user's promise:
+  // pay all minimums plus extra every month, regardless of how many debts remain.
+  const initialMinimumsTotal = ordered.reduce((s, d) => s + d.minimumPayment, 0);
+  const monthlyBudget = initialMinimumsTotal + extraPerMonth;
 
-  // Month 0 snapshot
+  // Detect debts whose min can't keep up with monthly interest — they grow forever
+  // unless extra/rollover bails them out.
+  const debtsBelowInterest = ordered
+    .filter((d) => {
+      const monthlyInterest = d.startingBalance * (d.apr / 100 / 12);
+      return d.minimumPayment > 0 && d.minimumPayment <= monthlyInterest;
+    })
+    .map((d) => d.id);
+
+  const months: DebtMonth[] = [];
   const startDate = new Date();
   startDate.setDate(1);
   months.push(snapshot(0, startDate, ordered, balances, paidPerAccount, interestPerAccount));
@@ -245,7 +292,8 @@ export function simulateDebtPayoff(
 
     monthIndex++;
 
-    // 1) Accrue monthly interest
+    // 1) Accrue monthly interest on each debt with a remaining balance.
+    //    APR / 12 is a standard simplification (true periodic billing varies by lender).
     for (const d of ordered) {
       if (balances[d.id] <= 0) continue;
       const monthlyRate = d.apr / 100 / 12;
@@ -254,16 +302,25 @@ export function simulateDebtPayoff(
       interestPerAccount[d.id] += interest;
     }
 
-    // 2) Apply minimum payments to all
-    let availableExtra = extraPerMonth;
+    // 2) Pay each active debt its minimum (capped at remaining balance).
+    let budgetSpent = 0;
     for (const d of ordered) {
       if (balances[d.id] <= 0) continue;
       const min = Math.min(d.minimumPayment, balances[d.id]);
       balances[d.id] -= min;
       paidPerAccount[d.id] += min;
+      budgetSpent += min;
     }
 
-    // 3) Apply extra to first non-zero in priority order; cascade overflow
+    // 3) Cascade the leftover budget to debts in priority order.
+    //    With rollover (default): leftover = (initialMins + extra) − minsPaidThisMonth.
+    //    As debts die, fewer mins are spent, more flows into the cascade pool — that's
+    //    the snowball / avalanche effect.
+    //    Without rollover: leftover = extraPerMonth, regardless of how many debts remain.
+    let availableExtra = rolloverFreedMinimums
+      ? Math.max(0, monthlyBudget - budgetSpent)
+      : extraPerMonth;
+
     for (const d of ordered) {
       if (availableExtra <= 0) break;
       if (balances[d.id] <= 0) continue;
@@ -273,7 +330,7 @@ export function simulateDebtPayoff(
       availableExtra -= apply;
     }
 
-    // 4) Track payoffs
+    // 4) Mark payoffs.
     for (const d of ordered) {
       if (payoffMonths[d.id] === undefined && balances[d.id] <= 0.005) {
         payoffMonths[d.id] = monthIndex;
@@ -295,9 +352,11 @@ export function simulateDebtPayoff(
   return {
     months,
     payoffMonth: monthIndex,
+    hitCap: monthIndex >= maxMonths,
     totalInterest: round(totalInterest),
     totalPaid: round(totalPaid),
     perAccountPayoffMonth: payoffMonths,
+    debtsBelowInterest,
   };
 }
 

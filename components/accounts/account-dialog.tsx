@@ -115,6 +115,12 @@ export function AccountDialog({ open, onOpenChange, account }: Props) {
 
           <div className="space-y-1.5">
             <Label htmlFor="balance">{isDebt ? "Current balance owed" : "Current balance"}</Label>
+            {isDebt && (
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                Enter the balance from your lender. Transactions on this account don&apos;t auto-adjust the balance —
+                update it here whenever you reconcile with your statement.
+              </p>
+            )}
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
               <Input

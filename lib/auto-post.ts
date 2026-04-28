@@ -138,14 +138,14 @@ async function postSingleOccurrence(
     return false;
   }
 
-  // Adjust account balance through the same code path the store uses.
-  // We do this directly here to avoid re-fetching: positive flow → balance up for assets,
-  // down for liabilities; negative flow → opposite.
-  await adjustBalance(accountId, item.direction === "income" ? item.amount : -item.amount);
+  // Adjust account balance only for asset accounts. Credit cards and loans are
+  // user-managed: the user reconciles their balance manually after the lender
+  // posts the charge.
+  await adjustAssetBalance(accountId, item.direction === "income" ? item.amount : -item.amount);
   return true;
 }
 
-async function adjustBalance(accountId: string, delta: number) {
+async function adjustAssetBalance(accountId: string, delta: number) {
   const supabase = createClient();
   const { data: account } = await supabase
     .from("accounts")
@@ -154,7 +154,8 @@ async function adjustBalance(accountId: string, delta: number) {
     .maybeSingle();
   if (!account) return;
   const isLiability = account.type === "credit" || account.type === "loan";
-  const next = round2(Number(account.balance) + (isLiability ? -delta : delta));
+  if (isLiability) return; // user-managed
+  const next = round2(Number(account.balance) + delta);
   await supabase.from("accounts").update({ balance: next }).eq("id", accountId);
 }
 

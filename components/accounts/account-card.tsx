@@ -1,13 +1,13 @@
 "use client";
 
 import * as React from "react";
-import { MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { CircleAlert, MoreHorizontal, Pencil, RefreshCcw, Trash2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { useFinance } from "@/lib/store";
 import type { Account } from "@/lib/types";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatRelative } from "@/lib/format";
 import { ACCOUNT_TYPE_LABELS, accountIcon } from "@/lib/icons";
 import { COLOR_HEX } from "@/lib/colors";
 import {
@@ -18,13 +18,19 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { AccountDialog } from "./account-dialog";
+import { isUserManagedBalance, transactionsSinceBalanceUpdate } from "@/lib/finance";
+import { cn } from "@/lib/utils";
 
 export function AccountCard({ account }: { account: Account }) {
   const removeAccount = useFinance((s) => s.removeAccount);
+  const transactions = useFinance((s) => s.transactions);
   const [editing, setEditing] = React.useState(false);
   const Icon = accountIcon(account.type);
-  const isDebt = account.type === "credit" || account.type === "loan";
+  const userManaged = isUserManagedBalance(account);
   const isCredit = account.type === "credit";
+
+  const staleTxs = userManaged ? transactionsSinceBalanceUpdate(account, transactions) : [];
+  const staleCount = staleTxs.length;
 
   return (
     <>
@@ -77,9 +83,9 @@ export function AccountCard({ account }: { account: Account }) {
         <div className="mt-4 flex items-baseline justify-between gap-2">
           <div>
             <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
-              {isDebt ? "Owed" : "Balance"}
+              {userManaged ? "Owed" : "Balance"}
             </div>
-            <div className={`text-2xl font-semibold tracking-tight num ${isDebt ? "text-coral" : ""}`}>
+            <div className={cn("text-2xl font-semibold tracking-tight num", userManaged && "text-coral")}>
               {formatCurrency(account.balance)}
             </div>
           </div>
@@ -106,9 +112,36 @@ export function AccountCard({ account }: { account: Account }) {
           </div>
         )}
 
-        {isDebt && account.minimumPayment !== undefined && account.minimumPayment > 0 && (
+        {userManaged && account.minimumPayment !== undefined && account.minimumPayment > 0 && (
           <div className="mt-3 text-xs text-muted-foreground">
             Min payment <span className="text-foreground font-medium num">{formatCurrency(account.minimumPayment)}/mo</span>
+          </div>
+        )}
+
+        {/* Stale balance reconciliation row — credit cards & loans only */}
+        {userManaged && (
+          <div className="mt-4 pt-3 border-t border-border/40 flex items-center gap-2">
+            {staleCount > 0 ? (
+              <div className="flex items-center gap-1.5 text-[11px] text-warning rounded-md bg-warning/10 px-2 py-1">
+                <CircleAlert className="size-3" />
+                <span>
+                  Stale · {staleCount} {staleCount === 1 ? "transaction" : "transactions"} since
+                </span>
+              </div>
+            ) : (
+              <span className="text-[11px] text-muted-foreground">
+                Updated {formatRelative(account.balanceUpdatedAt)}
+              </span>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="ml-auto h-7 px-2 text-xs gap-1"
+              onClick={() => setEditing(true)}
+            >
+              <RefreshCcw className="size-3" />
+              Update balance
+            </Button>
           </div>
         )}
       </Card>

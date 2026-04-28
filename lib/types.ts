@@ -39,6 +39,12 @@ export interface Account {
   icon?: string;
   notes?: string;
   archived?: boolean;
+  /**
+   * For credit/loan accounts: the timestamp when the user last set/updated the balance.
+   * Used to surface a "stale — N transactions since" reconciliation badge.
+   * For non-liability accounts the value still tracks balance edits but isn't surfaced.
+   */
+  balanceUpdatedAt: string;
   createdAt: string;
 }
 

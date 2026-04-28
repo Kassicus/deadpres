@@ -50,11 +50,12 @@ export function rowToAccount(r: AccountRow): Account {
     icon: r.icon ?? undefined,
     notes: r.notes ?? undefined,
     archived: r.archived,
+    balanceUpdatedAt: r.balance_updated_at,
     createdAt: r.created_at,
   };
 }
 
-export function accountToInsert(a: Omit<Account, "id" | "createdAt">, userId: string): AccountInsert {
+export function accountToInsert(a: Omit<Account, "id" | "createdAt" | "balanceUpdatedAt">, userId: string): AccountInsert {
   return {
     user_id: userId,
     name: a.name,
@@ -86,6 +87,7 @@ export function accountToUpdate(patch: Partial<Account>): Database["public"]["Ta
   if (patch.icon !== undefined) u.icon = patch.icon ?? null;
   if (patch.notes !== undefined) u.notes = patch.notes ?? null;
   if (patch.archived !== undefined) u.archived = patch.archived;
+  if (patch.balanceUpdatedAt !== undefined) u.balance_updated_at = patch.balanceUpdatedAt;
   return u;
 }
 
