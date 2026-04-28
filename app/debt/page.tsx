@@ -476,9 +476,25 @@ export default function DebtPage() {
                         <span className="font-medium text-foreground" style={{ color: target.color }}>
                           {target.name}
                         </span>{" "}
-                        gets <span className="num">{formatCurrency(target.minimumPayment)}</span> minimum +{" "}
-                        <span className="num">{formatCurrency(targetExtra)}</span>{" "}
-                        {idx === 0 ? "extra" : "rolled over from paid-off debts"} ={" "}
+                        gets <span className="num">{formatCurrency(target.minimumPayment)}</span> own min
+                        {phase.rolledFromIds.map((rid) => {
+                          const r = orderedDebts.find((x) => x.id === rid);
+                          if (!r) return null;
+                          return (
+                            <React.Fragment key={rid}>
+                              {" "}+ <span className="num">{formatCurrency(r.minimumPayment)}</span>{" "}
+                              <span className="text-muted-foreground/80">
+                                from <span className="font-medium text-foreground/90" style={{ color: r.color }}>{r.name}</span>
+                              </span>
+                            </React.Fragment>
+                          );
+                        })}
+                        {plan.extraPerMonth > 0.005 && (
+                          <>
+                            {" "}+ <span className="num">{formatCurrency(plan.extraPerMonth)}</span> extra
+                          </>
+                        )}
+                        {" "}={" "}
                         <span className="num font-medium text-foreground">{formatCurrency(targetPay)}</span> total.
                       </div>
                     )}
@@ -490,7 +506,7 @@ export default function DebtPage() {
                           <span className="font-medium text-foreground" style={{ color: target.color }}>
                             {target.name}
                           </span>{" "}
-                          paid off
+                          paid off · its <span className="num">{formatCurrency(target.minimumPayment)}</span> min joins the rollover
                         </span>
                         <ArrowRight className="size-3" />
                         <span>

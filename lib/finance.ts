@@ -459,6 +459,12 @@ export interface DebtPhase {
   payments: Record<string, number>;
   /** Sum of `payments` — the user's total monthly outflow this phase. */
   total: number;
+  /**
+   * Debts paid off before this phase started, in payoff order. Their minimum
+   * payments now flow into the target — each one is a named line in the
+   * target's payment breakdown.
+   */
+  rolledFromIds: string[];
 }
 
 /**
@@ -485,6 +491,7 @@ export function computeDebtPhases(
 
   const phases: DebtPhase[] = [];
   const active = new Set(ordered.map((d) => d.id));
+  const rolledFromIds: string[] = [];
   let phaseStart = 0;
 
   for (const event of events) {
@@ -511,9 +518,11 @@ export function computeDebtPhases(
       targetId: target.id,
       payments,
       total: round(total),
+      rolledFromIds: [...rolledFromIds],
     });
 
     active.delete(event.id);
+    rolledFromIds.push(event.id);
     phaseStart = event.payoffMonth;
   }
 
