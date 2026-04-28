@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { motion, LayoutGroup } from "framer-motion";
-import { Flame, TrendingDown, CalendarRange, DollarSign, Sparkles, ArrowDown, AlertTriangle } from "lucide-react";
+import { Flame, TrendingDown, CalendarRange, DollarSign, Sparkles, ArrowDown, AlertTriangle, Wallet, ArrowRight, Check, History, TrendingUp } from "lucide-react";
 import { Topbar } from "@/components/shell/topbar";
 import { PageHeader } from "@/components/shell/page-header";
 import { Card } from "@/components/ui/card";
@@ -10,7 +10,15 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Slider } from "@/components/ui/slider";
 import { useFinance } from "@/lib/store";
-import { simulateDebtPayoff, compareStrategies, orderDebts, type DebtScheduleAccount } from "@/lib/finance";
+import {
+  simulateDebtPayoff,
+  compareStrategies,
+  computeDebtPhases,
+  orderDebts,
+  actualPaymentsToDebt,
+  monthBuckets,
+  type DebtScheduleAccount,
+} from "@/lib/finance";
 import type { DebtStrategy } from "@/lib/types";
 import { COLOR_HEX } from "@/lib/colors";
 import { formatCurrency } from "@/lib/format";
@@ -41,6 +49,7 @@ const STRATEGY_DESC: Record<DebtStrategy, string> = {
 
 export default function DebtPage() {
   const accounts = useFinance((s) => s.accounts);
+  const transactions = useFinance((s) => s.transactions);
   const plan = useFinance((s) => s.debtPlan);
   const setDebtPlan = useFinance((s) => s.setDebtPlan);
 
@@ -85,6 +94,37 @@ export default function DebtPage() {
     () => (debts.length === 0 ? [] : compareStrategies(debts, plan.extraPerMonth, plan.customOrder)),
     [debts, plan.extraPerMonth, plan.customOrder],
   );
+
+  // Phase breakdown: how much to pay on each debt right now, and how those amounts shift
+  // every time a debt pays off. Each phase ends at a payoff event; the freed minimum
+  // (plus the existing extra) rolls into the next target.
+  const phases = React.useMemo(
+    () => (result ? computeDebtPhases(debts, result, plan.strategy, plan.extraPerMonth, plan.customOrder) : []),
+    [debts, result, plan.strategy, plan.extraPerMonth, plan.customOrder],
+  );
+
+  // Current-month payment per debt, surfaced inline on each row.
+  const currentPayments = phases[0]?.payments ?? {};
+  const monthlyBudget = totalMin + plan.extraPerMonth;
+
+  // Last 4 calendar months including the current one. Used by "Payment tracking"
+  // to compare what was *actually* paid (sum of incoming transfers) vs what the
+  // plan called for. Predictions assume planned payments — months that fall short
+  // mean the debt-free date in the chart is optimistic.
+  const buckets = React.useMemo(() => monthBuckets(4), []);
+  const actualsByDebt = React.useMemo(() => {
+    const map: Record<string, number[]> = {};
+    for (const d of debts) {
+      map[d.id] = buckets.map((b) => actualPaymentsToDebt(d.id, transactions, b.start, b.end));
+    }
+    return map;
+  }, [debts, transactions, buckets]);
+  const currentMonthIdx = buckets.length - 1;
+  const currentMonthShortfall = orderedDebts.reduce((sum, d) => {
+    const planned = currentPayments[d.id] ?? 0;
+    const paid = actualsByDebt[d.id]?.[currentMonthIdx] ?? 0;
+    return sum + Math.max(0, planned - paid);
+  }, 0);
 
   const interestSaved = (minOnly?.totalInterest ?? 0) - (result?.totalInterest ?? 0);
   const monthsSaved = (minOnly?.payoffMonth ?? 0) - (result?.payoffMonth ?? 0);
@@ -348,6 +388,237 @@ export default function DebtPage() {
           </Card>
         )}
 
+        {/* Payment plan: current month payments + how they cascade as debts pay off */}
+        {phases.length > 0 && (
+          <Card className="p-5">
+            <div className="flex items-center gap-2 mb-1">
+              <Wallet className="size-4 text-primary" />
+              <h3 className="font-semibold tracking-tight">What to pay each month</h3>
+            </div>
+            <p className="text-xs text-muted-foreground mb-4 leading-relaxed">
+              Your committed monthly outflow is{" "}
+              <span className="num font-medium text-foreground">{formatCurrency(monthlyBudget)}</span>
+              {plan.extraPerMonth > 0 && (
+                <>
+                  {" "}(<span className="num">{formatCurrency(totalMin)}</span> minimums +{" "}
+                  <span className="num">{formatCurrency(plan.extraPerMonth)}</span> extra)
+                </>
+              )}
+              . Keep paying that same total every month — when a debt pays off, redirect its money to the next target.
+            </p>
+
+            <ol className="space-y-3 list-none p-0 m-0">
+              {phases.map((phase, idx) => {
+                const target = orderedDebts.find((d) => d.id === phase.targetId);
+                if (!target) return null;
+                const isCurrent = idx === 0;
+                const span = Math.max(1, phase.endMonth - phase.startMonth);
+                const prevTarget = idx > 0 ? orderedDebts.find((d) => d.id === phases[idx - 1]?.targetId) : null;
+                const targetPay = phase.payments[phase.targetId] ?? 0;
+                const targetExtra = targetPay - target.minimumPayment;
+
+                return (
+                  <li key={idx} className="rounded-xl border border-border/60 bg-card/40 p-3">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-2">
+                      <span
+                        className={`text-[10px] uppercase tracking-widest font-medium ${
+                          isCurrent ? "text-primary" : "text-muted-foreground"
+                        }`}
+                      >
+                        {isCurrent ? "Right now" : prevTarget ? `After ${prevTarget.name} pays off` : `Phase ${idx + 1}`}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground/70 num">
+                        · {formatMonths(span)} · ends month {phase.endMonth}
+                      </span>
+                      <span className="ml-auto text-[11px] text-muted-foreground">
+                        target:{" "}
+                        <span className="font-medium text-foreground" style={{ color: target.color }}>
+                          {target.name}
+                        </span>
+                      </span>
+                    </div>
+
+                    <ul className="space-y-1 list-none p-0 m-0">
+                      {orderedDebts.map((d) => {
+                        const pay = phase.payments[d.id];
+                        if (pay === undefined) return null;
+                        const isTarget = d.id === phase.targetId;
+                        return (
+                          <li
+                            key={d.id}
+                            className={`flex items-center gap-2.5 px-2 py-1.5 rounded-md ${
+                              isTarget ? "bg-primary/8" : ""
+                            }`}
+                          >
+                            <span className="size-2 rounded-full shrink-0" style={{ background: d.color }} />
+                            <span
+                              className={`flex-1 text-sm truncate ${
+                                isTarget ? "font-medium" : "text-muted-foreground"
+                              }`}
+                            >
+                              {d.name}
+                            </span>
+                            <span
+                              className={`text-sm num tabular-nums ${
+                                isTarget ? "font-semibold text-foreground" : "text-muted-foreground"
+                              }`}
+                            >
+                              {formatCurrency(pay)}
+                              <span className="text-[10px] text-muted-foreground/70 font-normal">/mo</span>
+                            </span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+
+                    {targetExtra > 0.005 && (
+                      <div className="mt-2 pt-2 border-t border-border/40 text-[11px] text-muted-foreground leading-relaxed">
+                        <span className="font-medium text-foreground" style={{ color: target.color }}>
+                          {target.name}
+                        </span>{" "}
+                        gets <span className="num">{formatCurrency(target.minimumPayment)}</span> minimum +{" "}
+                        <span className="num">{formatCurrency(targetExtra)}</span>{" "}
+                        {idx === 0 ? "extra" : "rolled over from paid-off debts"} ={" "}
+                        <span className="num font-medium text-foreground">{formatCurrency(targetPay)}</span> total.
+                      </div>
+                    )}
+
+                    {idx < phases.length - 1 && (
+                      <div className="flex items-center justify-center gap-1.5 mt-2 -mb-1 text-[11px] text-muted-foreground">
+                        <Check className="size-3 text-success" />
+                        <span>
+                          <span className="font-medium text-foreground" style={{ color: target.color }}>
+                            {target.name}
+                          </span>{" "}
+                          paid off
+                        </span>
+                        <ArrowRight className="size-3" />
+                        <span>
+                          <span className="num">{formatCurrency(targetPay)}</span>/mo redirects
+                        </span>
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ol>
+          </Card>
+        )}
+
+        {/* Payment tracking: actual paid each month vs planned, so the user can see
+            whether the prediction above is being fed accurate inputs. */}
+        <Card className="p-5">
+          <div className="flex items-center gap-2 mb-1">
+            <History className="size-4 text-primary" />
+            <h3 className="font-semibold tracking-tight">Payment tracking</h3>
+          </div>
+          <p className="text-xs text-muted-foreground mb-4 leading-relaxed">
+            What you actually paid each month, totaled from transfers into each debt account.
+            {currentMonthShortfall > 0.005 ? (
+              <>
+                {" "}You&apos;re{" "}
+                <span className="text-warning font-medium num">{formatCurrency(currentMonthShortfall)}</span> behind plan
+                this month — predictions above assume the planned amounts.
+              </>
+            ) : (
+              <> If actual ever falls below planned, the debt-free date above will slip.</>
+            )}
+          </p>
+
+          <div className="overflow-x-auto -mx-1 px-1">
+            <table className="w-full text-sm border-separate border-spacing-0">
+              <thead>
+                <tr className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                  <th className="text-left font-medium pb-2 pr-3 sticky left-0 bg-card">Debt</th>
+                  <th className="text-right font-medium pb-2 px-2 whitespace-nowrap">Planned</th>
+                  {buckets.map((b) => (
+                    <th key={b.key} className="text-right font-medium pb-2 px-2 whitespace-nowrap">
+                      {b.isCurrent ? "This month" : b.label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {orderedDebts.map((d) => {
+                  const planned = currentPayments[d.id] ?? d.minimumPayment;
+                  const series = actualsByDebt[d.id] ?? [];
+                  const thisMonthPaid = series[currentMonthIdx] ?? 0;
+                  const delta = thisMonthPaid - planned;
+                  const onTrack = delta >= -0.005;
+                  return (
+                    <tr key={d.id} className="border-t border-border/40">
+                      <td className="py-2 pr-3 sticky left-0 bg-card">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="size-2 rounded-full shrink-0" style={{ background: d.color }} />
+                          <span className="truncate font-medium">{d.name}</span>
+                        </div>
+                      </td>
+                      <td className="py-2 px-2 text-right num tabular-nums text-muted-foreground whitespace-nowrap">
+                        {formatCurrency(planned)}
+                      </td>
+                      {series.map((amt, i) => {
+                        const isCurrent = i === currentMonthIdx;
+                        const cellDelta = amt - (isCurrent ? planned : d.minimumPayment);
+                        const below = cellDelta < -0.005;
+                        return (
+                          <td
+                            key={buckets[i].key}
+                            className={`py-2 px-2 text-right num tabular-nums whitespace-nowrap ${
+                              isCurrent ? "font-medium" : ""
+                            } ${below ? "text-warning" : "text-foreground"}`}
+                          >
+                            {amt > 0 ? formatCurrency(amt) : <span className="text-muted-foreground/60">—</span>}
+                            {isCurrent && amt > 0 && (
+                              <div className={`text-[10px] font-normal ${onTrack ? "text-success" : "text-warning"}`}>
+                                {onTrack
+                                  ? delta > 0.005
+                                    ? `+${formatCurrency(delta, { compact: true })}`
+                                    : "on plan"
+                                  : `−${formatCurrency(-delta, { compact: true })}`}
+                              </div>
+                            )}
+                            {isCurrent && amt <= 0 && planned > 0.005 && (
+                              <div className="text-[10px] font-normal text-warning">
+                                −{formatCurrency(planned, { compact: true })}
+                              </div>
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr className="border-t border-border/60 text-xs">
+                  <td className="py-2 pr-3 sticky left-0 bg-card text-muted-foreground uppercase tracking-widest text-[10px]">
+                    Total
+                  </td>
+                  <td className="py-2 px-2 text-right num tabular-nums whitespace-nowrap font-medium">
+                    {formatCurrency(monthlyBudget)}
+                  </td>
+                  {buckets.map((b, i) => {
+                    const total = orderedDebts.reduce((s, d) => s + (actualsByDebt[d.id]?.[i] ?? 0), 0);
+                    return (
+                      <td
+                        key={b.key}
+                        className="py-2 px-2 text-right num tabular-nums whitespace-nowrap font-medium"
+                      >
+                        {total > 0 ? formatCurrency(total) : <span className="text-muted-foreground/60">—</span>}
+                      </td>
+                    );
+                  })}
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+
+          <div className="flex items-center gap-2 mt-3 text-[11px] text-muted-foreground">
+            <TrendingUp className="size-3.5" />
+            Counts transfers into each debt account. Log a transfer from your checking to a credit card to see it here.
+          </div>
+        </Card>
+
         {/* Per-debt schedule, in strategy priority order */}
         <Card className="p-5">
           <h3 className="font-semibold tracking-tight mb-1">Order &amp; payoff</h3>
@@ -363,12 +634,17 @@ export default function DebtPage() {
                 const totalPaid = lastMonth?.byAccount[d.id]?.paid ?? 0;
                 const monthlyInterest = (d.startingBalance * d.apr) / 100 / 12;
                 const isUnderwater = underwaterIds.includes(d.id);
+                const currentPay = currentPayments[d.id] ?? d.minimumPayment;
+                const isCurrentTarget = phases[0]?.targetId === d.id;
+                const extraOnTarget = isCurrentTarget ? Math.max(0, currentPay - d.minimumPayment) : 0;
                 return (
                   <motion.li
                     key={d.id}
                     layout="position"
                     transition={{ type: "spring", stiffness: 380, damping: 32 }}
-                    className="flex items-center gap-3 rounded-xl border border-border/60 bg-card/60 p-3"
+                    className={`flex items-center gap-3 rounded-xl border p-3 ${
+                      isCurrentTarget ? "border-primary/40 bg-primary/5" : "border-border/60 bg-card/60"
+                    }`}
                   >
                     <motion.div
                       layout="position"
@@ -379,8 +655,13 @@ export default function DebtPage() {
                       {i + 1}
                     </motion.div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="font-medium truncate">{d.name}</span>
+                        {isCurrentTarget && (
+                          <span className="text-[9px] uppercase tracking-widest text-primary font-semibold px-1.5 py-0.5 rounded bg-primary/10">
+                            target
+                          </span>
+                        )}
                         {isUnderwater && <AlertTriangle className="size-3.5 text-warning shrink-0" aria-label="Minimum below interest" />}
                       </div>
                       <div className="text-xs text-muted-foreground">
@@ -390,11 +671,21 @@ export default function DebtPage() {
                       </div>
                     </div>
                     <div className="text-right text-sm shrink-0">
-                      <div className="num font-medium">
-                        {payoffM ? formatMonths(payoffM) : result?.hitCap ? "Never" : "—"}
+                      <div className="num font-semibold tabular-nums">
+                        {formatCurrency(currentPay)}
+                        <span className="text-[10px] text-muted-foreground/70 font-normal">/mo</span>
                       </div>
                       <div className="text-[11px] text-muted-foreground num">
-                        pay <span className="text-foreground">{formatCurrency(totalPaid, { compact: true })}</span> · interest{" "}
+                        {extraOnTarget > 0.005 ? (
+                          <>
+                            min + <span className="text-foreground">{formatCurrency(extraOnTarget, { compact: true })}</span> extra
+                          </>
+                        ) : (
+                          <>pay now · {payoffM ? `done in ${formatMonths(payoffM)}` : result?.hitCap ? "never" : "—"}</>
+                        )}
+                      </div>
+                      <div className="text-[10px] text-muted-foreground/80 num mt-0.5">
+                        total: <span className="text-foreground/80">{formatCurrency(totalPaid, { compact: true })}</span> · int{" "}
                         <span className="text-coral">{formatCurrency(interest, { compact: true })}</span>
                       </div>
                     </div>

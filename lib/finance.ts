@@ -389,6 +389,137 @@ function snapshot(
   };
 }
 
+/* ---------- Actual payments tracking (vs the plan) ---------- */
+
+export interface MonthBucket {
+  /** YYYY-MM key for stable map lookups. */
+  key: string;
+  /** First instant of the month. */
+  start: Date;
+  /** Last instant of the month (23:59:59.999). */
+  end: Date;
+  /** Short human label, e.g. "Apr 2026". */
+  label: string;
+  /** True for the calendar month containing `anchor`. */
+  isCurrent: boolean;
+}
+
+/** Most-recent-last list of N month buckets ending at `anchor`'s calendar month. */
+export function monthBuckets(monthsBack: number, anchor = new Date()): MonthBucket[] {
+  const out: MonthBucket[] = [];
+  const labelFmt = new Intl.DateTimeFormat(undefined, { month: "short", year: "numeric" });
+  for (let i = monthsBack - 1; i >= 0; i--) {
+    const start = new Date(anchor.getFullYear(), anchor.getMonth() - i, 1);
+    const end = new Date(anchor.getFullYear(), anchor.getMonth() - i + 1, 0, 23, 59, 59, 999);
+    out.push({
+      key: `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}`,
+      start,
+      end,
+      label: labelFmt.format(start),
+      isCurrent: i === 0,
+    });
+  }
+  return out;
+}
+
+/**
+ * Sum of payments toward a credit/loan account in [start, end]. Counts
+ * transfers whose destination is the debt account — that's the canonical
+ * "I paid the card" record in this app's data model. Charges (expenses on
+ * the card) are NOT counted; they grow the balance, not pay it down.
+ */
+export function actualPaymentsToDebt(
+  debtId: string,
+  txs: Transaction[],
+  start: Date,
+  end: Date,
+): number {
+  let total = 0;
+  const lo = start.getTime();
+  const hi = end.getTime();
+  for (const t of txs) {
+    if (t.type !== "transfer") continue;
+    if (t.toAccountId !== debtId) continue;
+    const td = new Date(t.date).getTime();
+    if (td >= lo && td <= hi) total += t.amount;
+  }
+  return round(total);
+}
+
+/* ---------- Payment phases (what to pay each month, by phase) ---------- */
+
+export interface DebtPhase {
+  /** Month this phase begins (0 = current month). */
+  startMonth: number;
+  /** Month the target debt finishes — phase ends here. */
+  endMonth: number;
+  /** Active target debt for this phase: receives all rollover + extra. */
+  targetId: string;
+  /** Per-debt monthly payment during this phase. Omits debts already paid off. */
+  payments: Record<string, number>;
+  /** Sum of `payments` — the user's total monthly outflow this phase. */
+  total: number;
+}
+
+/**
+ * Break the schedule into discrete phases bounded by debt payoffs. Within a phase,
+ * each non-target debt pays its minimum and the target absorbs the rollover —
+ * which is exactly the "after this card dies, the money flows here" picture the
+ * user needs when planning month-to-month payments.
+ */
+export function computeDebtPhases(
+  debts: DebtScheduleAccount[],
+  result: DebtScheduleResult,
+  strategy: DebtStrategy,
+  extraPerMonth: number,
+  customOrder?: string[],
+): DebtPhase[] {
+  if (debts.length === 0) return [];
+  const ordered = orderDebts(debts, strategy, customOrder);
+  const monthlyBudget = ordered.reduce((s, d) => s + d.minimumPayment, 0) + extraPerMonth;
+
+  const events = ordered
+    .map((d) => ({ id: d.id, payoffMonth: result.perAccountPayoffMonth[d.id] }))
+    .filter((e): e is { id: string; payoffMonth: number } => typeof e.payoffMonth === "number")
+    .sort((a, b) => a.payoffMonth - b.payoffMonth);
+
+  const phases: DebtPhase[] = [];
+  const active = new Set(ordered.map((d) => d.id));
+  let phaseStart = 0;
+
+  for (const event of events) {
+    const target = ordered.find((d) => active.has(d.id));
+    if (!target) break;
+
+    const otherMinSum = ordered
+      .filter((d) => active.has(d.id) && d.id !== target.id)
+      .reduce((s, d) => s + d.minimumPayment, 0);
+    const targetPayment = Math.max(target.minimumPayment, monthlyBudget - otherMinSum);
+
+    const payments: Record<string, number> = {};
+    let total = 0;
+    for (const d of ordered) {
+      if (!active.has(d.id)) continue;
+      const pay = d.id === target.id ? targetPayment : d.minimumPayment;
+      payments[d.id] = round(pay);
+      total += pay;
+    }
+
+    phases.push({
+      startMonth: phaseStart,
+      endMonth: event.payoffMonth,
+      targetId: target.id,
+      payments,
+      total: round(total),
+    });
+
+    active.delete(event.id);
+    phaseStart = event.payoffMonth;
+  }
+
+  return phases;
+}
+
 /* ---------- Compare strategies ---------- */
 
 export interface StrategyComparison {
