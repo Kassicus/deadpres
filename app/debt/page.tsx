@@ -2,9 +2,10 @@
 
 import * as React from "react";
 import { motion, LayoutGroup } from "framer-motion";
-import { Flame, TrendingDown, CalendarRange, DollarSign, Sparkles, ArrowDown, AlertTriangle, Wallet, ArrowRight, Check, History, TrendingUp } from "lucide-react";
+import { Flame, TrendingDown, CalendarRange, DollarSign, Sparkles, ArrowDown, AlertTriangle, Wallet, ArrowRight, Check, History, TrendingUp, ChevronLeft, ChevronRight, Target as TargetIcon } from "lucide-react";
 import { Topbar } from "@/components/shell/topbar";
 import { PageHeader } from "@/components/shell/page-header";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -26,6 +27,9 @@ import { EmptyState } from "@/components/shell/empty-state";
 import {
   AreaChart as ReAreaChart,
   Area,
+  BarChart as ReBarChart,
+  Bar,
+  Cell,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -106,6 +110,48 @@ export default function DebtPage() {
   // Current-month payment per debt, surfaced inline on each row.
   const currentPayments = phases[0]?.payments ?? {};
   const monthlyBudget = totalMin + plan.extraPerMonth;
+
+  // Per-month actual payment per debt, derived by diffing the simulation's
+  // cumulative `paid` per account between consecutive snapshots. This mirrors
+  // exactly what the simulator does each month — including partial last
+  // payments when a debt's remaining balance is less than the planned cascade.
+  const monthlyPayments = React.useMemo(() => {
+    if (!result) return [] as Array<{ month: number; date: string; byAccount: Record<string, number>; total: number }>;
+    const out: Array<{ month: number; date: string; byAccount: Record<string, number>; total: number }> = [];
+    for (let i = 1; i < result.months.length; i++) {
+      const curr = result.months[i];
+      const prev = result.months[i - 1];
+      const byAccount: Record<string, number> = {};
+      let total = 0;
+      for (const d of orderedDebts) {
+        const delta = Math.max(0, (curr.byAccount[d.id]?.paid ?? 0) - (prev.byAccount[d.id]?.paid ?? 0));
+        byAccount[d.id] = delta;
+        total += delta;
+      }
+      out.push({ month: i, date: curr.date, byAccount, total });
+    }
+    return out;
+  }, [result, orderedDebts]);
+
+  const monthlyChartData = React.useMemo(
+    () => monthlyPayments.map((m) => ({ month: m.month, ...m.byAccount, total: m.total })),
+    [monthlyPayments],
+  );
+
+  const totalPlanMonths = monthlyPayments.length;
+  const [selectedMonth, setSelectedMonth] = React.useState(1);
+
+  // Re-clamp when the slider/strategy changes the simulation length out from
+  // under us — otherwise selectedMonth could point past the end.
+  React.useEffect(() => {
+    if (totalPlanMonths === 0) return;
+    setSelectedMonth((m) => Math.min(Math.max(1, m), totalPlanMonths));
+  }, [totalPlanMonths]);
+
+  const selectedDetail = monthlyPayments[selectedMonth - 1];
+  const selectedPhase = phases.find(
+    (p) => selectedMonth > p.startMonth && selectedMonth <= p.endMonth,
+  );
 
   // Last 4 calendar months including the current one. Used by "Payment tracking"
   // to compare what was *actually* paid (sum of incoming transfers) vs what the
@@ -388,150 +434,283 @@ export default function DebtPage() {
           </Card>
         )}
 
-        {/* Payment plan: current month payments + how they cascade as debts pay off */}
-        {phases.length > 0 && (
+        {/* Monthly payment plan: bar chart of where each dollar goes per month,
+            with a clickable detail card. Updates live with the extra slider. */}
+        {monthlyPayments.length > 0 && selectedDetail && (
           <Card className="p-5">
             <div className="flex items-center gap-2 mb-1">
               <Wallet className="size-4 text-primary" />
               <h3 className="font-semibold tracking-tight">What to pay each month</h3>
             </div>
             <p className="text-xs text-muted-foreground mb-4 leading-relaxed">
-              Your committed monthly outflow is{" "}
-              <span className="num font-medium text-foreground">{formatCurrency(monthlyBudget)}</span>
-              {plan.extraPerMonth > 0 && (
-                <>
-                  {" "}(<span className="num">{formatCurrency(totalMin)}</span> minimums +{" "}
-                  <span className="num">{formatCurrency(plan.extraPerMonth)}</span> extra)
-                </>
-              )}
-              . Keep paying that same total every month — when a debt pays off, redirect its money to the next target.
+              Each bar is one month of your{" "}
+              <span className="num font-medium text-foreground">{formatCurrency(monthlyBudget)}</span>{" "}
+              committed outflow, split by where it goes. Bars shrink in the final month a debt pays off and the freed money
+              shifts to the next target. Click any bar — or use the arrows — to see that month&apos;s breakdown.
             </p>
 
-            <ol className="space-y-3 list-none p-0 m-0">
-              {phases.map((phase, idx) => {
-                const target = orderedDebts.find((d) => d.id === phase.targetId);
-                if (!target) return null;
-                const isCurrent = idx === 0;
-                const span = Math.max(1, phase.endMonth - phase.startMonth);
-                const prevPhase = idx > 0 ? phases[idx - 1] : null;
-                const prevEnding = prevPhase ? orderedDebts.find((d) => d.id === prevPhase.endingId) : null;
-                const ending = orderedDebts.find((d) => d.id === phase.endingId);
-                const targetPay = phase.payments[phase.targetId] ?? 0;
-                const targetExtra = targetPay - target.minimumPayment;
-                // Amount that frees up when this phase ends. If the target itself
-                // pays off, its whole payment cascades; otherwise only the ending
-                // debt's minimum is freed and joins the target's bucket.
-                const redirectAmount = ending ? phase.payments[ending.id] ?? 0 : 0;
+            {/* Stacked bar chart */}
+            <div className="h-[220px] -mx-1">
+              <ResponsiveContainer>
+                <ReBarChart
+                  data={monthlyChartData}
+                  margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+                  onClick={(state: { activeTooltipIndex?: number } | null) => {
+                    const idx = state?.activeTooltipIndex;
+                    if (typeof idx === "number" && monthlyPayments[idx]) {
+                      setSelectedMonth(monthlyPayments[idx].month);
+                    }
+                  }}
+                >
+                  <CartesianGrid stroke="var(--border)" strokeOpacity={0.5} vertical={false} />
+                  <XAxis
+                    dataKey="month"
+                    tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
+                    tickLine={false}
+                    axisLine={false}
+                    tickFormatter={(m: number) => (m % 6 === 0 || m === 1 ? `${m}m` : "")}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
+                    tickLine={false}
+                    axisLine={false}
+                    tickFormatter={(v) => formatCurrency(v as number, { compact: true })}
+                    width={60}
+                  />
+                  <Tooltip
+                    cursor={{ fill: "var(--accent)", opacity: 0.25 }}
+                    content={({ active, payload, label }) => {
+                      if (!active || !payload?.length) return null;
+                      const total = payload.reduce((s, p) => s + (p.value as number), 0);
+                      return (
+                        <div className="rounded-lg border border-border/70 bg-popover px-3 py-2 text-xs shadow-xl min-w-[200px]">
+                          <div className="font-medium mb-1.5">Month {label}</div>
+                          {payload
+                            .filter((p) => (p.value as number) > 0.005)
+                            .sort((a, b) => (b.value as number) - (a.value as number))
+                            .map((p) => {
+                              const d = orderedDebts.find((x) => x.id === p.dataKey);
+                              if (!d) return null;
+                              return (
+                                <div key={String(p.dataKey)} className="flex items-center gap-2 text-muted-foreground">
+                                  <span className="size-2 rounded-full" style={{ background: d.color }} />
+                                  <span className="truncate">{d.name}</span>
+                                  <span className="ml-auto font-mono tabular-nums text-foreground">
+                                    {formatCurrency(p.value as number, { compact: true })}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          <div className="flex items-center gap-2 pt-1.5 mt-1.5 border-t border-border/50">
+                            <span className="text-foreground font-medium">Total</span>
+                            <span className="ml-auto font-mono tabular-nums font-medium">
+                              {formatCurrency(total, { compact: true })}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    }}
+                  />
+                  {orderedDebts.map((d) => (
+                    <Bar key={d.id} dataKey={d.id} stackId="a" fill={d.color} cursor="pointer">
+                      {monthlyChartData.map((entry) => (
+                        <Cell
+                          key={entry.month}
+                          fillOpacity={entry.month === selectedMonth ? 1 : 0.55}
+                        />
+                      ))}
+                    </Bar>
+                  ))}
+                </ReBarChart>
+              </ResponsiveContainer>
+            </div>
 
-                return (
-                  <li key={idx} className="rounded-xl border border-border/60 bg-card/40 p-3">
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-2">
+            {/* Month detail card with prev/next navigation */}
+            <div className="mt-4 rounded-xl border border-border/60 bg-card/40 p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Button
+                  variant="outline"
+                  size="icon-sm"
+                  onClick={() => setSelectedMonth((m) => Math.max(1, m - 1))}
+                  disabled={selectedMonth <= 1}
+                  aria-label="Previous month"
+                >
+                  <ChevronLeft />
+                </Button>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium num">
+                    Month {selectedMonth}{" "}
+                    <span className="text-muted-foreground font-normal">of {totalPlanMonths}</span>
+                  </div>
+                  <div className="text-[11px] text-muted-foreground">
+                    {new Date(selectedDetail.date).toLocaleDateString(undefined, {
+                      month: "long",
+                      year: "numeric",
+                    })}
+                    {selectedPhase && (() => {
+                      const target = orderedDebts.find((d) => d.id === selectedPhase.targetId);
+                      return target ? (
+                        <>
+                          {" "}· targeting{" "}
+                          <span className="font-medium text-foreground" style={{ color: target.color }}>
+                            {target.name}
+                          </span>
+                        </>
+                      ) : null;
+                    })()}
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  size="icon-sm"
+                  onClick={() => setSelectedMonth((m) => Math.min(totalPlanMonths, m + 1))}
+                  disabled={selectedMonth >= totalPlanMonths}
+                  aria-label="Next month"
+                >
+                  <ChevronRight />
+                </Button>
+              </div>
+
+              {/* Per-debt breakdown for the selected month */}
+              <ul className="space-y-1 list-none p-0 m-0">
+                {orderedDebts.map((d) => {
+                  const amt = selectedDetail.byAccount[d.id] ?? 0;
+                  if (amt < 0.005) return null;
+                  const isTarget = selectedPhase?.targetId === d.id;
+                  const pct = selectedDetail.total > 0 ? (amt / selectedDetail.total) * 100 : 0;
+                  return (
+                    <li
+                      key={d.id}
+                      className={`flex items-center gap-2.5 px-2 py-1.5 rounded-md ${
+                        isTarget ? "bg-primary/8" : ""
+                      }`}
+                    >
+                      <span className="size-2 rounded-full shrink-0" style={{ background: d.color }} />
                       <span
-                        className={`text-[10px] uppercase tracking-widest font-medium ${
-                          isCurrent ? "text-primary" : "text-muted-foreground"
+                        className={`flex-1 text-sm truncate ${
+                          isTarget ? "font-medium" : "text-muted-foreground"
                         }`}
                       >
-                        {isCurrent ? "Right now" : prevEnding ? `After ${prevEnding.name} pays off` : `Phase ${idx + 1}`}
-                      </span>
-                      <span className="text-[10px] text-muted-foreground/70 num">
-                        · {formatMonths(span)} · ends month {phase.endMonth}
-                      </span>
-                      <span className="ml-auto text-[11px] text-muted-foreground">
-                        target:{" "}
-                        <span className="font-medium text-foreground" style={{ color: target.color }}>
-                          {target.name}
-                        </span>
-                      </span>
-                    </div>
-
-                    <ul className="space-y-1 list-none p-0 m-0">
-                      {orderedDebts.map((d) => {
-                        const pay = phase.payments[d.id];
-                        if (pay === undefined) return null;
-                        const isTarget = d.id === phase.targetId;
-                        return (
-                          <li
-                            key={d.id}
-                            className={`flex items-center gap-2.5 px-2 py-1.5 rounded-md ${
-                              isTarget ? "bg-primary/8" : ""
-                            }`}
-                          >
-                            <span className="size-2 rounded-full shrink-0" style={{ background: d.color }} />
-                            <span
-                              className={`flex-1 text-sm truncate ${
-                                isTarget ? "font-medium" : "text-muted-foreground"
-                              }`}
-                            >
-                              {d.name}
-                            </span>
-                            <span
-                              className={`text-sm num tabular-nums ${
-                                isTarget ? "font-semibold text-foreground" : "text-muted-foreground"
-                              }`}
-                            >
-                              {formatCurrency(pay)}
-                              <span className="text-[10px] text-muted-foreground/70 font-normal">/mo</span>
-                            </span>
-                          </li>
-                        );
-                      })}
-                    </ul>
-
-                    {targetExtra > 0.005 && (
-                      <div className="mt-2 pt-2 border-t border-border/40 text-[11px] text-muted-foreground leading-relaxed">
-                        <span className="font-medium text-foreground" style={{ color: target.color }}>
-                          {target.name}
-                        </span>{" "}
-                        gets <span className="num">{formatCurrency(target.minimumPayment)}</span> own min
-                        {phase.rolledFromIds.map((rid) => {
-                          const r = orderedDebts.find((x) => x.id === rid);
-                          if (!r) return null;
-                          return (
-                            <React.Fragment key={rid}>
-                              {" "}+ <span className="num">{formatCurrency(r.minimumPayment)}</span>{" "}
-                              <span className="text-muted-foreground/80">
-                                from <span className="font-medium text-foreground/90" style={{ color: r.color }}>{r.name}</span>
-                              </span>
-                            </React.Fragment>
-                          );
-                        })}
-                        {plan.extraPerMonth > 0.005 && (
-                          <>
-                            {" "}+ <span className="num">{formatCurrency(plan.extraPerMonth)}</span> extra
-                          </>
+                        {d.name}
+                        {isTarget && (
+                          <span className="ml-2 inline-flex items-center gap-1 text-[9px] uppercase tracking-widest text-primary font-semibold px-1.5 py-0.5 rounded bg-primary/10">
+                            <TargetIcon className="size-2.5" />
+                            target
+                          </span>
                         )}
-                        {" "}={" "}
-                        <span className="num font-medium text-foreground">{formatCurrency(targetPay)}</span> total.
-                      </div>
-                    )}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground/70 num tabular-nums w-10 text-right">
+                        {pct.toFixed(0)}%
+                      </span>
+                      <span
+                        className={`text-sm num tabular-nums w-24 text-right ${
+                          isTarget ? "font-semibold text-foreground" : "text-foreground/90"
+                        }`}
+                      >
+                        {formatCurrency(amt)}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
 
-                    {idx < phases.length - 1 && ending && (
-                      <div className="flex items-center justify-center gap-1.5 mt-2 -mb-1 text-[11px] text-muted-foreground flex-wrap">
-                        <Check className="size-3 text-success" />
-                        <span>
-                          <span className="font-medium text-foreground" style={{ color: ending.color }}>
-                            {ending.name}
-                          </span>{" "}
-                          paid off
-                        </span>
+              {/* Rollover math for the target this month */}
+              {selectedPhase && (() => {
+                const target = orderedDebts.find((d) => d.id === selectedPhase.targetId);
+                if (!target) return null;
+                const targetActual = selectedDetail.byAccount[target.id] ?? 0;
+                if (targetActual < 0.005) return null;
+                const hasRollover = selectedPhase.rolledFromIds.length > 0 || plan.extraPerMonth > 0.005;
+                if (!hasRollover) return null;
+                return (
+                  <div className="mt-3 pt-3 border-t border-border/40 text-[11px] text-muted-foreground leading-relaxed">
+                    <span className="font-medium text-foreground" style={{ color: target.color }}>
+                      {target.name}
+                    </span>{" "}
+                    receives <span className="num">{formatCurrency(target.minimumPayment)}</span> own min
+                    {selectedPhase.rolledFromIds.map((rid) => {
+                      const r = orderedDebts.find((x) => x.id === rid);
+                      if (!r) return null;
+                      return (
+                        <React.Fragment key={rid}>
+                          {" "}+ <span className="num">{formatCurrency(r.minimumPayment)}</span>{" "}
+                          <span className="text-muted-foreground/80">
+                            from{" "}
+                            <span className="font-medium text-foreground/90" style={{ color: r.color }}>
+                              {r.name}
+                            </span>
+                          </span>
+                        </React.Fragment>
+                      );
+                    })}
+                    {plan.extraPerMonth > 0.005 && (
+                      <>
+                        {" "}+ <span className="num">{formatCurrency(plan.extraPerMonth)}</span> extra
+                      </>
+                    )}
+                    {" "}={" "}
+                    <span className="num font-medium text-foreground">{formatCurrency(targetActual)}</span>
+                    {Math.abs(targetActual - (selectedPhase.payments[target.id] ?? 0)) > 0.5 && (
+                      <span className="text-muted-foreground/80">
+                        {" "}(partial — finishes paying off this month)
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* Footer total + payoff arrow if a debt pays off this month */}
+              <div className="flex items-center justify-between mt-3 pt-3 border-t border-border/40">
+                <span className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                  Total this month
+                </span>
+                <span className="text-sm font-semibold num tabular-nums">
+                  {formatCurrency(selectedDetail.total)}
+                </span>
+              </div>
+
+              {selectedPhase && selectedPhase.endMonth === selectedMonth && (() => {
+                const ending = orderedDebts.find((d) => d.id === selectedPhase.endingId);
+                const nextPhase = phases[phases.indexOf(selectedPhase) + 1];
+                const nextTarget = nextPhase
+                  ? orderedDebts.find((d) => d.id === nextPhase.targetId)
+                  : null;
+                if (!ending) return null;
+                return (
+                  <div className="mt-2 flex items-center justify-center gap-1.5 text-[11px] text-muted-foreground flex-wrap">
+                    <Check className="size-3 text-success" />
+                    <span>
+                      <span className="font-medium text-foreground" style={{ color: ending.color }}>
+                        {ending.name}
+                      </span>{" "}
+                      paid off
+                    </span>
+                    {nextTarget && (
+                      <>
                         <ArrowRight className="size-3" />
                         <span>
-                          <span className="num">{formatCurrency(redirectAmount)}</span>/mo redirects
-                          {ending.id !== phase.targetId && (
-                            <>
-                              {" "}to{" "}
-                              <span className="font-medium text-foreground" style={{ color: target.color }}>
-                                {target.name}
-                              </span>
-                            </>
-                          )}
+                          freed up money flows to{" "}
+                          <span className="font-medium text-foreground" style={{ color: nextTarget.color }}>
+                            {nextTarget.name}
+                          </span>{" "}
+                          next month
                         </span>
-                      </div>
+                      </>
                     )}
-                  </li>
+                  </div>
                 );
-              })}
-            </ol>
+              })()}
+            </div>
+
+            {/* Legend */}
+            <div className="flex flex-wrap gap-3 mt-3">
+              {orderedDebts.map((d) => (
+                <div key={d.id} className="flex items-center gap-1.5 text-xs">
+                  <span className="size-2.5 rounded-full" style={{ background: d.color }} />
+                  <span className="text-muted-foreground">{d.name}</span>
+                </div>
+              ))}
+            </div>
           </Card>
         )}
 
