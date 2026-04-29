@@ -451,10 +451,16 @@ export function actualPaymentsToDebt(
 export interface DebtPhase {
   /** Month this phase begins (0 = current month). */
   startMonth: number;
-  /** Month the target debt finishes — phase ends here. */
+  /** Month at which `endingId` finishes — phase ends here. */
   endMonth: number;
   /** Active target debt for this phase: receives all rollover + extra. */
   targetId: string;
+  /**
+   * The debt that pays off at `endMonth` (closes this phase). May or may
+   * not equal `targetId`: when a smaller debt pays off naturally from its
+   * own minimum, the target stays the same and only this `endingId` changes.
+   */
+  endingId: string;
   /** Per-debt monthly payment during this phase. Omits debts already paid off. */
   payments: Record<string, number>;
   /** Sum of `payments` — the user's total monthly outflow this phase. */
@@ -516,6 +522,7 @@ export function computeDebtPhases(
       startMonth: phaseStart,
       endMonth: event.payoffMonth,
       targetId: target.id,
+      endingId: event.id,
       payments,
       total: round(total),
       rolledFromIds: [...rolledFromIds],

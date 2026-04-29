@@ -413,9 +413,15 @@ export default function DebtPage() {
                 if (!target) return null;
                 const isCurrent = idx === 0;
                 const span = Math.max(1, phase.endMonth - phase.startMonth);
-                const prevTarget = idx > 0 ? orderedDebts.find((d) => d.id === phases[idx - 1]?.targetId) : null;
+                const prevPhase = idx > 0 ? phases[idx - 1] : null;
+                const prevEnding = prevPhase ? orderedDebts.find((d) => d.id === prevPhase.endingId) : null;
+                const ending = orderedDebts.find((d) => d.id === phase.endingId);
                 const targetPay = phase.payments[phase.targetId] ?? 0;
                 const targetExtra = targetPay - target.minimumPayment;
+                // Amount that frees up when this phase ends. If the target itself
+                // pays off, its whole payment cascades; otherwise only the ending
+                // debt's minimum is freed and joins the target's bucket.
+                const redirectAmount = ending ? phase.payments[ending.id] ?? 0 : 0;
 
                 return (
                   <li key={idx} className="rounded-xl border border-border/60 bg-card/40 p-3">
@@ -425,7 +431,7 @@ export default function DebtPage() {
                           isCurrent ? "text-primary" : "text-muted-foreground"
                         }`}
                       >
-                        {isCurrent ? "Right now" : prevTarget ? `After ${prevTarget.name} pays off` : `Phase ${idx + 1}`}
+                        {isCurrent ? "Right now" : prevEnding ? `After ${prevEnding.name} pays off` : `Phase ${idx + 1}`}
                       </span>
                       <span className="text-[10px] text-muted-foreground/70 num">
                         · {formatMonths(span)} · ends month {phase.endMonth}
@@ -499,18 +505,26 @@ export default function DebtPage() {
                       </div>
                     )}
 
-                    {idx < phases.length - 1 && (
-                      <div className="flex items-center justify-center gap-1.5 mt-2 -mb-1 text-[11px] text-muted-foreground">
+                    {idx < phases.length - 1 && ending && (
+                      <div className="flex items-center justify-center gap-1.5 mt-2 -mb-1 text-[11px] text-muted-foreground flex-wrap">
                         <Check className="size-3 text-success" />
                         <span>
-                          <span className="font-medium text-foreground" style={{ color: target.color }}>
-                            {target.name}
+                          <span className="font-medium text-foreground" style={{ color: ending.color }}>
+                            {ending.name}
                           </span>{" "}
-                          paid off · its <span className="num">{formatCurrency(target.minimumPayment)}</span> min joins the rollover
+                          paid off
                         </span>
                         <ArrowRight className="size-3" />
                         <span>
-                          <span className="num">{formatCurrency(targetPay)}</span>/mo redirects
+                          <span className="num">{formatCurrency(redirectAmount)}</span>/mo redirects
+                          {ending.id !== phase.targetId && (
+                            <>
+                              {" "}to{" "}
+                              <span className="font-medium text-foreground" style={{ color: target.color }}>
+                                {target.name}
+                              </span>
+                            </>
+                          )}
                         </span>
                       </div>
                     )}
